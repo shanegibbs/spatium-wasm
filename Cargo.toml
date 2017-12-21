@@ -1,0 +1,17 @@
+[workspace]
+
+[package]
+name = "spatium-wasm"
+version = "0.1.0"
+authors = ["Shane Gibbs <shane@hands.net.nz>"]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+spatium-lib = { path = "lib" }
+lazy_static = "1.0.0"
+rand = "*"
+
+[patch.crates-io]
+rand = { git = "https://github.com/shanegibbs/rand.git", branch = "wasm" }

@@ -1,0 +1,11 @@
+[package]
+name = "spatium-lib"
+version = "0.1.0"
+authors = ["Shane Gibbs <shane@hands.net.nz>"]
+
+[dependencies]
+spatium-network = { path = "../network" }
+ndarray = "0.10.0"
+ndarray-rand = "0.6.1"
+rand = "*"
+pcg_rand = "0.7.1"

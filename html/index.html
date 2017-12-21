@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>Spatium Console</title>
+    <meta charset="utf-8">
+    <style>
+        html,
+        body {
+            _background-color: black;
+            _color: white;
+            _font-size: 12px;
+        }
+
+        pre {
+            _background-color: rgb(235, 235, 235);
+        }
+
+        .canvas {
+            _border: 1px solid black;
+            _position: absolute;
+            _left: 12px;
+            _top: 12px;
+            _float: left;
+        }
+
+        .frame-info {
+            _margin-left: 8px;
+            _float: left;
+        }
+    </style>
+
+    <!-- jQuery (necessary for Bootstrap's JavaScript plugins) -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+
+    <!-- Latest compiled and minified CSS -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u"
+        crossorigin="anonymous">
+
+    <!-- Optional theme -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap-theme.min.css" integrity="sha384-rHyoN1iRsVXV4nD0JutlnGaslCJuC7uwjduW9SVrLvRYooPp2bWYgmgJQIXwl/Sp"
+        crossorigin="anonymous">
+
+    <!-- Latest compiled and minified JavaScript -->
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa"
+        crossorigin="anonymous"></script>
+
+</head>
+
+<body>
+    <div class="container">
+        <div class="page-head">
+            <h1>Console</h1>
+            <p class="lead"></p>
+        </div>
+        <table>
+            <tr>
+                <td style="vertical-align:top">
+                    <div class="" style="float: left;">
+                        <canvas id="canvas" class="canvas"></canvas>
+                    </div>
+                </td>
+                <td style="vertical-align:top; padding-left:12px">
+                    <div class="" style="float: left;">
+                        <div class="panel panel-default">
+                            <div class="panel-body">
+                                <button class="btn btn-default" onclick="buttonStep()">Step</button>
+                                <button class="btn btn-default" onclick="buttonRun()">Run</button>
+                            </div>
+                        </div>
+                        <div class="progress">
+                            <div id="run-progress" class="progress-bar" role="progressbar" aria-valuenow="00" aria-valuemin="0" aria-valuemax="100" style="width: 0%;">
+                            </div>
+                        </div>
+                        <p>Output</p>
+                        <pre id="frameInfo" class="frame-info"></pre>
+                    </div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <script>
+
+        const canvas = document.getElementById('canvas');
+        canvas.width = 140;
+        canvas.style.width = "140px";
+        canvas.height = 140;
+        canvas.style.height = "140px";
+
+        const frameInfo = document.getElementById('frameInfo');
+
+        const module = {}
+
+        function buttonStep() {
+            step()
+        }
+
+        function buttonRun() {
+            run()
+        }
+
+        function env() {
+            function sp_print(text) {
+                text = stringFrom(module, text)
+                console.info("> " + text)
+                // var output = document.createElement("pre");
+                // output.innerHTML = text
+                // document.body.appendChild(output);
+            }
+            function sp_random() {
+                return Math.random()
+            }
+
+            const gridHeight = 3
+            const gridWidth = 3
+
+            const gridOffsetX = 10
+            const gridOffsetY = 10
+            const gridStepHeight = 40
+            const gridStepWidth = 40
+
+            const ctx = canvas.getContext("2d");
+
+            // Draw crisp lines
+            // http://www.mobtowers.com/html5-canvas-crisp-lines-every-time/
+            ctx.translate(0.5, 0.5)
+
+            function sp_clear_screen() {
+                // console.info("> clear screen")
+
+                // clear
+                ctx.fillStyle = "white"
+                ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+                // draw grid
+                ctx.beginPath()
+                ctx.moveTo(gridOffsetX, gridOffsetY)
+                ctx.lineTo(gridOffsetX, gridOffsetY + (gridStepHeight * gridHeight))
+                ctx.lineTo(gridOffsetX + (gridStepWidth * gridWidth), gridOffsetY + (gridStepHeight * gridHeight))
+                ctx.lineTo(gridOffsetX + (gridStepWidth * gridWidth), gridOffsetY)
+                ctx.lineTo(gridOffsetX, gridOffsetY)
+                ctx.strokeStyle = "black"
+                ctx.lineWidth = 1
+
+                for (let x = 1; x < gridWidth; x++) {
+                    ctx.moveTo(gridOffsetX + (gridStepWidth * x), gridOffsetY)
+                    ctx.lineTo(gridOffsetX + (gridStepWidth * x), gridOffsetY + gridStepHeight * gridHeight)
+                }
+                for (let y = 1; y < gridHeight; y++) {
+                    ctx.moveTo(gridOffsetX, gridOffsetY + gridStepHeight * y)
+                    ctx.lineTo(gridOffsetX + (gridStepWidth * gridWidth), gridOffsetY + gridStepHeight * y)
+                }
+
+                ctx.stroke()
+            }
+            function sp_draw_sprite(i, x, y) {
+                // console.info("> draw agent " + x + ", " + y)
+
+                if (i == 0) {
+                    ctx.fillStyle = "blue"
+                } else if (i == 1) {
+                    ctx.fillStyle = "black"
+                } else if (i == 2) {
+                    ctx.fillStyle = "green"
+                }
+
+                ctx.fillRect(
+                    gridOffsetX + gridStepWidth * x,
+                    gridOffsetY + gridStepHeight * y,
+                    gridStepWidth, gridStepHeight)
+
+                ctx.strokeStyle = "black"
+                ctx.lineWidth = 1
+                ctx.rect(gridOffsetX + gridStepWidth * x, gridOffsetY + gridStepHeight * y, gridStepWidth, gridStepHeight);
+                ctx.stroke()
+            }
+            function sp_frame_info(info) {
+                info = stringFrom(module, info)
+                frameInfo.innerHTML = info
+            }
+            function sp_episode_number(i) {
+                valeur = (i / 10) * 100
+                $('.progress-bar').css('width', valeur + '%').attr('aria-valuenow', valeur)
+            }
+
+            let imports = {
+                sp_print,
+                sp_random,
+                sp_clear_screen,
+                sp_draw_sprite,
+                sp_frame_info,
+                sp_episode_number,
+            }
+            return { env: imports }
+        }
+
+        function fetchAndBuild(url, importObject) {
+            return fetch(url).then(response =>
+                response.arrayBuffer()
+            ).then(bytes =>
+                WebAssembly.instantiate(bytes, importObject)
+                ).then(results =>
+                    results.instance
+                ).then(buildModule);
+        }
+
+        function buildModule(instance) {
+            module.memory = instance.exports.memory
+            module.alloc = instance.exports.alloc
+            module.dealloc = instance.exports.dealloc
+            module.get_charstar = function () {
+                return stringFrom(module, instance.exports.get_charstar())
+            }
+            module.step = instance.exports.step
+            return module
+        }
+
+        function stringFrom(module, cstr) {
+            const bytes = new Uint8Array(module.memory.buffer).slice(cstr)
+            s = ""
+            for (let n in bytes) {
+                b = bytes[n]
+                if (b == 0) {
+                    break
+                }
+                s += String.fromCharCode(b)
+            }
+            module.dealloc(cstr)
+            return s
+        }
+
+        function round(value, decimals) {
+            return Number(Math.round(value + 'e' + decimals) + 'e-' + decimals)
+        }
+
+        fetchAndBuild("spatium.wasm", env()).then(module => {
+            // const msg = module.get_charstar()
+            // var output = document.createElement("pre");
+            // output.innerHTML = msg
+            // document.body.appendChild(output);
+            module.step()
+        })
+
+        function step() {
+            return module.step()
+        }
+
+        function run() {
+            const fps = 10
+            const targetDelta = 1000 / 10
+            let actualFps = 0;
+
+            let prevTimestamp = null;
+            const gameLoopStep = (timestamp) => {
+                if (!prevTimestamp) {
+                    prevTimestamp = timestamp
+                }
+
+                let delta = timestamp - prevTimestamp;
+                // console.log(delta);
+
+                if (delta <= targetDelta) {
+                    requestAnimationFrame(gameLoopStep)
+                    return
+                }
+
+                if (step()) {
+                    prevTimestamp = timestamp
+                    // actualFps = round(1000 / delta, 2)
+                    // console.log("fps " + actualFps)
+                    requestAnimationFrame(gameLoopStep)
+                } else {
+                    console.log("Game loop ended")
+                }
+            }
+
+            gameLoopStep()
+        }
+
+    </script>
+</body>
+
+</html>
