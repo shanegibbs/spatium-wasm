@@ -1,4 +1,8 @@
 
+### Links
+
+* [Live Demo](https://shanegibbs.github.io/spatium-wasm/)
+
 #### References
 
 https://github.com/killercup/wasm-experiments
