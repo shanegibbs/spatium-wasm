@@ -1,5 +1,9 @@
+#![feature(test)]
+
 extern crate ndarray;
 extern crate ndarray_rand;
+extern crate pcg_rand;
 extern crate rand;
 
-mod network;
+// mod network;
+mod ndnetwork;

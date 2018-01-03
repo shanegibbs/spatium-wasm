@@ -154,6 +154,7 @@ impl<T: SpatiumSys> Spatium<T> {
 
         state
     }
+    // do AI stuff and call self.execute_action
     fn process(&mut self, game: Game, s: GameState) {
         let mut q_val = self.q
             .get(&s.arr)

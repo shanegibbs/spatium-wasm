@@ -18,10 +18,19 @@ test-pkg:
 	cargo test -p spatium-$(PKG)
 
 test-pkg-nocapture:
-	cargo test -p spatium-$(PKG) -- --nocapture
+	RUST_TEST_THREADS=1 _RUST_BACKTRACE=full cargo test -p spatium-$(PKG) -- --nocapture
 
 test-nocapture:
 	cargo test -p spatium-lib -- --nocapture
+
+bench:
+	cargo bench --all
+
+bench-pkg:
+	cargo bench -p spatium-$(PKG)
+
+tensorflow-bench:
+	./tensorflow-benchmark/venv/bin/python ./tensorflow-benchmark/tensorflow-benchmark.py
 
 setup:
 	# https://www.hellorust.com/setup/wasm-target/

@@ -83,12 +83,18 @@
     </div>
 
     <script>
+        const gridHeight = 3
+        const gridWidth = 3
+        const gridOffsetX = 20
+        const gridOffsetY = 20
+        const gridStepHeight = 60
+        const gridStepWidth = 60
 
         const canvas = document.getElementById('canvas');
-        canvas.width = 140;
-        canvas.style.width = "140px";
-        canvas.height = 140;
-        canvas.style.height = "140px";
+        canvas.width = (gridStepWidth * gridWidth) + (gridOffsetX * 2);
+        canvas.style.width = canvas.width + "px";
+        canvas.height = (gridStepHeight * gridHeight) + (gridOffsetY * 2);
+        canvas.style.height = canvas.height + "px";
 
         const frameInfo = document.getElementById('frameInfo');
 
@@ -113,14 +119,6 @@
             function sp_random() {
                 return Math.random()
             }
-
-            const gridHeight = 3
-            const gridWidth = 3
-
-            const gridOffsetX = 10
-            const gridOffsetY = 10
-            const gridStepHeight = 40
-            const gridStepWidth = 40
 
             const ctx = canvas.getContext("2d");
 
