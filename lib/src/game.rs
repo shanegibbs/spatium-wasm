@@ -1,6 +1,6 @@
-use ndarray::{Array, Ix2, Ix3};
-use std::fmt;
+use ndarray::{Array, Ix2};
 use {SpatiumSys, SpatiumSysHelper};
+use action::*;
 
 pub struct Sprite {
     pub x: usize,
@@ -15,37 +15,6 @@ impl Sprite {
 
 fn sprite(x: usize, y: usize) -> Sprite {
     Sprite { x: x, y: y }
-}
-
-#[derive(Debug)]
-pub enum Action {
-    Up,
-    Right,
-    Down,
-    Left,
-}
-
-impl fmt::Display for Action {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-       match *self {
-           Action::Up => write!(f, "Up"),
-           Action::Right => write!(f, "Right"),
-           Action::Down => write!(f, "Down"),
-           Action::Left => write!(f, "Left"),
-       }
-    }
-}
-
-impl From<usize> for Action {
-    fn from(i: usize) -> Action {
-        match i {
-            0 => Action::Up,
-            1 => Action::Right,
-            2 => Action::Down,
-            3 => Action::Left,
-            i => panic!(format!("Bad action value: {}", i)),
-        }
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -106,7 +75,7 @@ impl Game {
     }
     pub fn step<T: SpatiumSys>(
         &mut self,
-        helper: SpatiumSysHelper<T>,
+        _helper: SpatiumSysHelper<T>,
         action: &Action,
     ) -> (GameState, usize, bool) {
         if self.done {

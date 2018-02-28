@@ -21,7 +21,7 @@ pub extern "C" fn dealloc(ptr: *mut c_void, cap: usize) {
 }
 
 lazy_static! {
-  static ref DATA: Mutex<Spatium<SpatiumJsSys>> = Mutex::new(Spatium::new(SpatiumJsSys {}));
+  static ref DATA: Mutex<Spatium<SpatiumJsSys>> = Mutex::new(Spatium::new(SpatiumJsSys::new()));
 }
 
 // pub extern "C" fn get_charstar() -> *mut c_char {

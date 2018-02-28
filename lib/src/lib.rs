@@ -1,32 +1,30 @@
+extern crate autograd as ag;
 extern crate ndarray;
 extern crate ndarray_rand;
 extern crate pcg_rand;
 extern crate rand;
 
+mod action;
 mod game;
-use game::{Action, Game, GameState};
+mod network;
+
+use game::{Game, GameState};
+use action::*;
+use network::*;
 
 use std::sync::{Arc, RwLock, RwLockReadGuard};
-use std::collections::HashMap;
-
-use ndarray_rand::RandomExt;
-use ndarray::Array2;
-use ndarray::{Array, Ix1, Ix2};
-use ndarray::prelude::*;
 
 use pcg_rand::Pcg32Basic;
 
 use rand::SeedableRng;
-use rand::distributions::Range;
-use rand::distributions::IndependentSample;
 
 pub trait SpatiumSys {
     fn info(&self, &str) {}
     fn random(&mut self) -> f64;
     fn clear_screen(&self) {}
-    fn draw_sprite(&self, i: usize, x: usize, y: usize) {}
-    fn frame_info(&self, info: &str) {}
-    fn episode_number(&self, i: usize) {}
+    fn draw_sprite(&self, _i: usize, _x: usize, _y: usize) {}
+    fn frame_info(&self, _info: &str) {}
+    fn episode_number(&self, _i: usize) {}
 }
 
 pub struct SpatiumSysHelper<T: SpatiumSys> {
@@ -56,12 +54,12 @@ impl<T: SpatiumSys> SpatiumSysHelper<T> {
     fn info<S: Into<String>>(&self, s: S) {
         self.sys.read().unwrap().info(s.into().as_ref())
     }
-    fn draw_sprite(&self, i: usize, x: usize, y: usize) {
-        self.sys.read().unwrap().draw_sprite(i, x, y)
-    }
-    fn clear_screen(&self) {
-        self.sys.read().unwrap().clear_screen()
-    }
+    // fn draw_sprite(&self, i: usize, x: usize, y: usize) {
+    //     self.sys.read().unwrap().draw_sprite(i, x, y)
+    // }
+    // fn clear_screen(&self) {
+    //     self.sys.read().unwrap().clear_screen()
+    // }
 }
 
 pub struct Spatium<T: SpatiumSys> {
@@ -69,7 +67,7 @@ pub struct Spatium<T: SpatiumSys> {
     rng: Pcg32Basic,
     episode: usize,
     step: usize,
-    q: HashMap<Array<u8, Ix2>, Array<f32, Ix1>>,
+    network: QTable,
     game: Option<Game>,
     last_state: Option<(GameState, usize, bool)>,
 }
@@ -80,8 +78,8 @@ impl<T: SpatiumSys> Spatium<T> {
             sys: SpatiumSysHelper::new(sys),
             rng: Pcg32Basic::from_seed([42, 42]),
             step: 0,
+            network: QTable::new(),
             episode: 0,
-            q: HashMap::new(),
             game: None,
             last_state: None,
         };
@@ -156,35 +154,12 @@ impl<T: SpatiumSys> Spatium<T> {
     }
     // do AI stuff and call self.execute_action
     fn process(&mut self, game: Game, s: GameState) {
-        let mut q_val = self.q
-            .get(&s.arr)
-            .map(|a| a.to_owned())
-            .unwrap_or(Array::zeros((4)));
-
-        let noise: Array1<f32> = Array1::random_using((4), Range::new(0., 3.), &mut self.rng);
-        // self.sys.info(format!("{}", noise));
-
-        let final_q_val = q_val.clone() + noise;
-
-        let action_i = argmax(&final_q_val).0;
-        let action = action_i.into();
+        let action = self.network.next_action(&mut self.rng, &s);
 
         // render the current game and the decided action
         let (s1, r, done) = self.execute_action(game, &action);
 
-        // update Q
-        let s1_q_val = self.q
-            .get(&s1.arr)
-            .map(|a| a.to_owned())
-            .unwrap_or(Array::zeros((4)));
-        let r1 = argmax(&s1_q_val).1;
-
-        let lr = 0.8f32;
-        let y = 0.95f32;
-
-        let existing = q_val[[action_i]];
-        q_val[[action_i]] = existing + lr * (r as f32 + y * r1 - existing);
-        self.q.insert(s.arr, q_val);
+        self.network.result(s, &action, &s1, r, done);
     }
     pub fn step(&mut self) -> bool {
         // render final state
@@ -200,25 +175,13 @@ impl<T: SpatiumSys> Spatium<T> {
 
         // extract current state
         let game = self.game.take().unwrap();
-        let (s, last_r, _) = self.last_state.take().unwrap();
+        let (s, _last_r, _) = self.last_state.take().unwrap();
 
         // process step
         self.process(game, s);
 
         true
     }
-}
-
-fn argmax(arr: &Array1<f32>) -> (usize, f32) {
-    arr.iter()
-        .enumerate()
-        .fold((0, std::f32::MIN), |(max_i, max_n), (i, n)| {
-            if *n > max_n {
-                (i, *n)
-            } else {
-                (max_i, max_n)
-            }
-        })
 }
 
 #[cfg(test)]
@@ -236,23 +199,6 @@ mod tests {
         fn random(&mut self) -> f64 {
             rand::random()
         }
-    }
-
-    #[test]
-    fn test_max() {
-        let mut n: Array<f32, Ix1> = Array::zeros((4));
-        n[[0]] = 0f32;
-        n[[1]] = 1f32;
-        n[[2]] = 5f32;
-        n[[3]] = 2f32;
-        assert_eq!(argmax(&n), (2, 5f32));
-
-        let mut n: Array<f32, Ix1> = Array::zeros((4));
-        n[[0]] = -5f32;
-        n[[1]] = -6f32;
-        n[[2]] = -7f32;
-        n[[3]] = -2f32;
-        assert_eq!(argmax(&n), (3, -2f32));
     }
 
     #[test]

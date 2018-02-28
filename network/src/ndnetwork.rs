@@ -55,46 +55,93 @@ fn mse(output: &Matrix, ideal_output: &Matrix) -> f64 {
 
 // https://github.com/mnielsen/neural-networks-and-deep-learning/tree/master/src
 
-fn update_output_weights(
+fn neuron_sum_input(input: &Matrix, weights: &Matrix, bias: &Matrix) -> Matrix {
+    assert_eq!(weights.cols(), bias.cols());
+    assert_eq!(weights.rows(), input.cols());
+    input.dot(weights) + bias
+}
+
+fn neuron_output(input: &Matrix, weights: &Matrix, bias: &Matrix) -> Matrix {
+    Sigmoid::eval(neuron_sum_input(input, weights, bias))
+}
+
+fn update_hidden_layer_weights(
+    layer_input: &Matrix,
+    forward_weights_grade: &Matrix,
+    weights: &Matrix,
+    bias: &Matrix,
+    lr: f64,
+) -> (Matrix, Matrix, Matrix) {
+    println!("\n hidden_layer_input={:?}", layer_input);
+    // println!("\n weights={:?}", weights);
+    // println!("\n bias={:?}", bias);
+    println!("\n forward_weights_grade={:?}", forward_weights_grade);
+    let inputsum = neuron_sum_input(layer_input, weights, bias);
+    println!("\n inputsum={:?}", inputsum);
+
+    let output = Sigmoid::eval(inputsum.clone());
+    println!("\n output={:?}", output);
+
+    let grad_output_to_inputsum = Sigmoid::derivative(inputsum.clone());
+    println!("\n grad_output_to_inputsum={:?}", grad_output_to_inputsum);
+
+    // TODO: calculate grad to output. Is sum of weights grad to each nuron.
+    // in this case grad to output is just forward_weights_grade
+
+    // TODO: grad_e_to_inputsum is wrong
+    let grad_e_to_inputsum = forward_weights_grade.clone() * grad_output_to_inputsum;
+    println!("\n grad_e_to_inputsum={:?}", grad_e_to_inputsum);
+
+    let grade_e_to_weight = layer_input.t().clone().dot(&grad_e_to_inputsum);
+    // println!("\n grade_e_to_weight={:?}", grade_e_to_weight);
+
+    let change = grade_e_to_weight.clone() * -lr; // * -1 here to minimize error
+                                                  // println!("\n change={:?}", change);
+    let new_weights = weights.clone() + change;
+
+    let change_b = grad_e_to_inputsum * -lr;
+    // println!("\n change_b={:?}", change_b);
+    let new_bias = bias.clone() + change_b;
+
+    (new_weights, new_bias, grade_e_to_weight.t().to_owned())
+}
+
+fn update_output_layer_weights(
     layer_input: &Matrix,
     ideal_output: &Matrix,
     weights: &Matrix,
     bias: &Matrix,
     lr: f64,
-) -> (Matrix, Matrix) {
+) -> (Matrix, Matrix, Matrix) {
     // println!("\n layer_input={:?}", layer_input);
     // println!("\n weights={:?}", weights);
 
-    assert_eq!(weights.cols(), bias.cols());
-    assert_eq!(weights.rows(), layer_input.cols());
-    let input = layer_input.dot(weights) + bias;
-    // println!("\n input={:?}", input);
+    let inputsum = neuron_sum_input(layer_input, weights, bias);
+    // println!("\n inputsum={:?}", inputsum);
 
-    let output = Sigmoid::eval(input.clone());
+    let output = Sigmoid::eval(inputsum.clone());
     // println!("\n output={:?}", output);
     assert_eq!(output.dim(), ideal_output.dim());
 
-    let grad_e_to_output = output - ideal_output;
+    let grad_e_to_output = (output - ideal_output) * 2.0;
     // println!("\n grad_e_to_output={:?}", grad_e_to_output);
-    let grad_output_to_input = Sigmoid::derivative(input.clone());
-    // println!("\n grad_output_to_input={:?}", grad_output_to_input);
-    let grad_input_to_weight = layer_input.clone();
-    // println!("\n grad_input_to_weight={:?}", grad_input_to_weight);
+    let grad_output_to_inputsum = Sigmoid::derivative(inputsum.clone());
+    // println!("\n grad_output_to_input={:?}", grad_output_to_inputsum);
 
-    let grad_e_to_input = grad_e_to_output * grad_output_to_input;
-    // println!("\n grad_e_to_input={:?}", grad_e_to_input);
+    let grad_e_to_inputsum = grad_e_to_output * grad_output_to_inputsum;
+    // println!("\n grad_e_to_input={:?}", grad_e_to_inputsum);
 
-    let grade_e_to_weight = layer_input.t().clone().dot(&grad_e_to_input);
+    let grade_e_to_weight = layer_input.t().clone().dot(&grad_e_to_inputsum);
     // println!("\n grade_e_to_weight={:?}", grade_e_to_weight);
 
-    let change = grade_e_to_weight * -lr; // * -1 here to minimize error
+    let change = grade_e_to_weight.clone() * -lr; // * -1 here to minimize error
     let new_weights = weights.clone() + change;
 
-    let change_b = grad_e_to_input * -lr;
+    let change_b = grad_e_to_inputsum * -lr;
     // println!("\n change_b={:?}", change_b);
     let new_bias = bias.clone() + change_b;
 
-    (new_weights, new_bias)
+    (new_weights, new_bias, grade_e_to_weight.t().to_owned())
 }
 
 #[cfg(test)]
@@ -114,13 +161,13 @@ mod tests {
         let weights = arr2(&[[0.5], [0.6]]);
         let bias = arr2(&[[0.8]]);
 
-        let result = update_output_weights(&input, &ideal_output, &weights, &bias, 0.1);
+        let result = update_output_layer_weights(&input, &ideal_output, &weights, &bias, 0.1);
         // println!("\n{:?}", result);
         assert_eq!(
-            result,
+            (result.0, result.1),
             (
-                arr2(&[[0.5008898061989221], [0.6017796123978443]]),
-                arr2(&[[0.8044490309946107]])
+                arr2(&[[0.5017796123978443], [0.6035592247956885]]),
+                arr2(&[[0.8088980619892214]])
             )
         );
     }
@@ -134,16 +181,16 @@ mod tests {
         let weights = arr2(&[[0.5, 0.7], [0.6, 0.8]]);
         let bias = arr2(&[[0.8, 0.2]]);
 
-        let result = update_output_weights(&input, &ideal_output, &weights, &bias, 0.1);
+        let result = update_output_layer_weights(&input, &ideal_output, &weights, &bias, 0.1);
         // println!("\n{:?}", result);
         assert_eq!(
-            result,
+            (result.0, result.1),
             (
                 arr2(&[
-                    [0.5008898061989221, 0.6970381259710519],
-                    [0.6017796123978443, 0.7940762519421037]
+                    [0.5017796123978443, 0.6940762519421037],
+                    [0.6035592247956885, 0.7881525038842075],
                 ]),
-                arr2(&[[0.8044490309946107, 0.18519062985525936]])
+                arr2(&[[0.8088980619892214, 0.1703812597105187]])
             )
         );
     }
@@ -158,18 +205,16 @@ mod tests {
         let weights = arr2(&[[0.5, 0.7, 0.1], [0.6, 0.8, 0.2]]);
         let bias = arr2(&[[0.8, 0.2, 0.3]]);
 
-        let result = update_output_weights(&input, &ideal_output, &weights, &bias, 0.1);
+        let result = update_output_layer_weights(&input, &ideal_output, &weights, &bias, 0.1);
         // println!("\n{:?}", result);
         assert_eq!(
-            result,
+            (result.0, result.1),
             (
                 arr2(&[
-                    [0.5008898061989221, 0.6970381259710519, 0.09712317712630263],
-                    [0.6017796123978443, 0.7940762519421037, 0.19424635425260525]
+                    [0.5017796123978443, 0.6940762519421037, 0.09424635425260525],
+                    [0.6035592247956885, 0.7881525038842075, 0.1884927085052105]
                 ]),
-                arr2(&[
-                    [0.8044490309946107, 0.18519062985525936, 0.2856158856315131]
-                ])
+                arr2(&[[0.8088980619892214, 0.1703812597105187, 0.2712317712630262]])
             )
         );
     }
@@ -186,19 +231,19 @@ mod tests {
         let mut bias = arr2(&[[0.8, 0.2, 0.3]]);
 
         for i in 0..2000 {
-            let (weights_new, bias_new) =
-                update_output_weights(&input, &ideal_output, &weights, &bias, 0.1);
+            let (weights_new, bias_new, _) =
+                update_output_layer_weights(&input, &ideal_output, &weights, &bias, 0.1);
             weights = weights_new;
             bias = bias_new;
 
-            err = mse(&Sigmoid::eval(input.dot(&weights) + &bias), &ideal_output);
+            err = mse(&neuron_output(&input, &weights, &bias), &ideal_output);
             if i == 0 {
                 println!("mse={:?}", err);
             }
         }
 
         println!("mse={:?}", err);
-        assert!(err < 0.0026);
+        assert!(err < 0.00120);
     }
 
     #[test]
@@ -211,8 +256,6 @@ mod tests {
         ];
         let inputs: Vec<_> = training_set.iter().map(|v| &v.0).collect();
         let ideal_outputs: Vec<_> = training_set.iter().map(|v| &v.1).collect();
-        // println!("\ninputs={:?}", inputs);
-        // println!("\noutputs={:?}", ideal_outputs);
 
         let mut weights = arr2(&[[0.3], [0.7]]);
         let mut bias = arr2(&[[0.5]]);
@@ -225,15 +268,15 @@ mod tests {
 
         for i in 0..500 {
             for t in &training_set {
-                let (weights_new, bias_new) =
-                    update_output_weights(&t.0, &t.1, &weights, &bias, 0.1);
+                let (weights_new, bias_new, _) =
+                    update_output_layer_weights(&t.0, &t.1, &weights, &bias, 0.1);
                 weights = weights_new;
                 bias = bias_new;
             }
 
             let mut err = 0.0;
             for t in &training_set {
-                err += mse(&Sigmoid::eval(t.0.dot(&weights) + &bias), &t.1);
+                err += mse(&neuron_output(&t.0, &weights, &bias), &t.1);
             }
             err /= training_set.len() as f64;
 
@@ -265,124 +308,102 @@ mod tests {
         for t in &training_set {
             let answer = Sigmoid::eval(t.0.dot(&weights) + &bias)[(0, 0)];
             println!("\nanswer={:?}", answer);
-            let answer = if answer >= 0.5 { 1.0 } else { 0.0 };
-            assert_eq!(t.1[(0, 0)], answer);
+            assert_eq!(t.1[(0, 0)], answer.round());
         }
     }
 
-    fn test_layer() {
-        let lr = 0.1f64;
+    #[test]
+    fn test_update_output_weights_bitxor_training() {
+        let training_set = [
+            (arr2(&[[0.0, 0.0]]), arr2(&[[0.0]])),
+            (arr2(&[[0.0, 1.0]]), arr2(&[[1.0]])),
+            (arr2(&[[1.0, 0.0]]), arr2(&[[1.0]])),
+            (arr2(&[[1.0, 1.0]]), arr2(&[[0.0]])),
+        ];
+        let inputs: Vec<_> = training_set.iter().map(|v| &v.0).collect();
+        let ideal_outputs: Vec<_> = training_set.iter().map(|v| &v.1).collect();
 
-        // input
+        let lr = 0.1;
+        let mut weights_1 = arr2(&[[0.3, 0.1], [0.7, 0.2]]);
+        let mut bias_1 = arr2(&[[0.2, 0.6]]);
+        let mut weights_2 = arr2(&[[0.5], [0.7]]);
+        let mut bias_2 = arr2(&[[0.5]]);
 
-        let input = arr2(&[[0.1, 0.2, 0.7]]);
-        println!("\ninput=\n{:?}", input);
+        for i in 0..1000 {
+            // for t in &training_set {
+            // let input = &t.0;
+            // let ideal_output = &t.1;
+            let input = &training_set[3].0;
+            let ideal_output = &training_set[3].1;
 
-        // ideal output
+            println!("\n input={:?}", input);
+            println!("\n ideal_output={:?}", ideal_output);
 
-        let ideal_output = arr2(&[[1.0, 0.0, 0.0]]);
-        println!("\nideal_output=\n{:?}", ideal_output);
+            let layer_1_output = neuron_output(input, &weights_1, &bias_1);
+            let layer_2_output = neuron_output(&layer_1_output, &weights_2, &bias_2);
+            println!("\n layer_1_output={:?}", layer_1_output);
+            println!("\n layer_2_output={:?}", layer_2_output);
 
-        // model
+            let err_before = mse(&layer_2_output, ideal_output);
 
-        let weights_ij = arr2(&[[0.1, 0.2, 0.3], [0.3, 0.2, 0.7], [0.4, 0.3, 0.9]]);
-        let bias_ij = Array::from_elem((1, 3), 1.);
-        println!("\nweights_ij=\n{:?}", weights_ij);
-        println!("\nbias_ij=\n{:?}", bias_ij);
+            let (weights_2_new, bias_2_new, grade_e_to_weight) =
+                update_output_layer_weights(&layer_1_output, ideal_output, &weights_2, &bias_2, lr);
 
-        let weights_jk = arr2(&[[0.2, 0.3, 0.5], [0.3, 0.5, 0.7], [0.6, 0.4, 0.8]]);
-        let bias_jk = Array::from_elem((1, 3), 1.);
-        println!("\nweights_jk=\n{:?}", weights_jk);
-        println!("\nbias_jk=\n{:?}", bias_jk);
+            println!("\n weights_2_new={:?}", weights_2_new);
+            println!("\n bias_2_new={:?}", bias_2_new);
 
-        let weights_kl = arr2(&[[0.1, 0.4, 0.8], [0.3, 0.7, 0.2], [0.5, 0.2, 0.9]]);
-        let bias_kl = Array::from_elem((1, 3), 1.);
-        println!("\nweights_kl=\n{:?}", weights_kl);
-        println!("\nbias_kl=\n{:?}", bias_kl);
+            let (weights_1_new, bias_1_new, _) =
+                update_hidden_layer_weights(&input, &grade_e_to_weight, &weights_1, &bias_1, lr);
 
-        // forward
+            println!("\n weights_1_new={:?}", weights_1_new);
+            println!("\n bias_1_new={:?}", bias_1_new);
 
-        let h1_out = Sigmoid::eval(input.dot(&weights_ij) + &bias_ij);
-        println!("\nh1_out=\n{:?}", h1_out);
+            weights_1 = weights_1_new;
+            bias_1 = bias_1_new;
 
-        let h2_out = Sigmoid::eval(h1_out.dot(&weights_jk) + &bias_jk);
-        println!("\nh2_out=\n{:?}", h2_out);
+            weights_2 = weights_2_new;
+            bias_2 = bias_2_new;
 
-        let output = Sigmoid::eval(h2_out.dot(&weights_kl) + &bias_kl);
-        println!("\nout_out=\n{:?}", output);
+            let layer_1_output = neuron_output(input, &weights_1, &bias_1);
+            let layer_2_output = neuron_output(&layer_1_output, &weights_2, &bias_2);
+            let err_after = mse(&layer_2_output, ideal_output);
+            let improvement = err_before - err_after;
 
-        // error
+            println!("\n err_before={:?}", err_before);
+            println!("\n err_after={:?}", err_after);
+            println!("\n improvement={:?}", improvement);
+            assert!(improvement > 0.0);
+            panic!();
+            // }
 
-        let mse_val = mse(&output, &ideal_output);
-        println!("\nmse=\n{:?}", mse_val); // 0.330125
+            let mut err = 0.0;
+            for t in &training_set {
+                err += mse(
+                    &neuron_output(
+                        &neuron_output(&t.0, &weights_1, &bias_1),
+                        &weights_2,
+                        &bias_2,
+                    ),
+                    &t.1,
+                );
+            }
+            err /= training_set.len() as f64;
+            println!("\n err={:?}", err);
+        }
 
-        // update kl weights
+        println!("\n weights_1={:?}", weights_1);
+        println!("\n bias_1={:?}", bias_1);
+        println!("\n weights_2={:?}", weights_2);
+        println!("\n bias_2={:?}", bias_2);
 
-        let wrt_output = ideal_output.clone() - &output;
-        println!("\nwrt_output=\n{:?}", wrt_output);
-
-        let layer_out = h2_out.dot(&weights_kl) + &bias_kl;
-        let wrt_activation = Sigmoid::derivative(layer_out.clone());
-        println!("\nwrt_activation=\n{:?}", wrt_activation);
-
-        let wrt_weight = h2_out;
-        println!("\nwrt_weight=\n{:?}", wrt_weight);
-
-        let n = wrt_output.clone() * wrt_activation;
-        let layer_error = output.t().dot(&n);
-        println!("\nlayer_error=\n{:?}", layer_error);
-
-        let change = layer_error.clone() * lr;
-        println!("\nchange=\n{:?}", change);
-
-        let weights_kl_updated = weights_kl.clone() + change;
-        println!("\nweights_kl_updated=\n{:?}", weights_kl_updated);
-
-        // update jk weights
-
-        let wrt_output = weights_kl.clone() * &layer_error;
-        println!("\nwrt_output=\n{:?}", wrt_output);
-
-        let wrt_activation = Sigmoid::derivative(h1_out.dot(&weights_jk) + &bias_jk);
-        println!("\nwrt_activation=\n{:?}", wrt_activation);
-
-        let wrt_weight = h1_out;
-        println!("\nwrt_weight=\n{:?}", wrt_weight);
-
-        let layer_error = wrt_output * wrt_activation * wrt_weight;
-        println!("\nlayer_error=\n{:?}", layer_error);
-
-        let change = layer_error.clone() * lr;
-        println!("\nchange=\n{:?}", change);
-
-        let weights_jk_updated = weights_jk.clone() + change;
-        println!("\nweights_jk_updated=\n{:?}", weights_jk_updated);
-
-        // update ik weights
-
-        let wrt_output = weights_ij.clone() * &layer_error;
-        println!("\nwrt_output=\n{:?}", wrt_output);
-
-        let wrt_activation = Sigmoid::derivative(input.dot(&weights_ij) + &bias_ij);
-        println!("\nwrt_activation=\n{:?}", wrt_activation);
-
-        let wrt_weight = input.clone();
-        println!("\nwrt_weight=\n{:?}", wrt_weight);
-
-        let layer_error = wrt_output * wrt_activation * wrt_weight;
-        println!("\nlayer_error=\n{:?}", layer_error);
-
-        let change = layer_error.clone() * lr;
-        println!("\nchange=\n{:?}", change);
-
-        let weights_ij_updated = weights_ij.clone() + change;
-        println!("\nweights_ij_updated=\n{:?}", weights_ij_updated);
-
-
-        let h1_out = Sigmoid::eval(input.dot(&weights_ij) + &bias_ij);
-        let h2_out = Sigmoid::eval(h1_out.dot(&weights_jk_updated) + &bias_jk);
-        let output = Sigmoid::eval(h2_out.dot(&weights_kl_updated) + &bias_kl);
-        let mse_val = mse(&output, &ideal_output);
-        println!("\nmse=\n{:?}", mse_val); // 0.330125
+        for t in &training_set {
+            let answer = neuron_output(
+                &neuron_output(&t.0, &weights_1, &bias_1),
+                &weights_2,
+                &bias_2,
+            )[(0, 0)];
+            println!("\nanswer={:?}", answer);
+            // assert_eq!(t.1[(0, 0)], answer.round());
+        }
     }
 }

@@ -1,11 +1,10 @@
 use spatium_lib::SpatiumSys;
 use externs;
 
-
 pub struct SpatiumJsSys;
 
 impl SpatiumJsSys {
-    fn new() -> SpatiumJsSys {
+    pub fn new() -> SpatiumJsSys {
         SpatiumJsSys {}
     }
 }
