@@ -236,10 +236,15 @@ impl Network for SingleLayerNetwork {
                     (i, v)
                 }}
             }
+            println!("Right {:?}", get_act_val!([0, 0]));
             println!("Right {:?}", get_act_val!([0, 1]));
-            println!("Right {:?}", get_act_val!([2, 0]));
             println!("Down {:?}", get_act_val!([0, 2]));
+            println!("Down {:?}\n", get_act_val!([1, 2]));
+
+            println!("Down {:?}", get_act_val!([0, 0]));
             println!("Down {:?}", get_act_val!([1, 0]));
+            println!("Right {:?}", get_act_val!([2, 0]));
+            println!("Right {:?}", get_act_val!([2, 1]));
         }
     }
 }
@@ -276,7 +281,7 @@ mod test {
         // let pred = net.make_prediction(input);
         // println!("{:?}", pred);
 
-        let a = net.next_action(&dummy, Some(rng), &state);
+        let _a = net.next_action(&dummy, Some(rng), &state);
         // println!("{:?}", a);
     }
 }

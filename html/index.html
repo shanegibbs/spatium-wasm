@@ -83,6 +83,8 @@
     </div>
 
     <script>
+        const maxEpisodes = 300
+
         const gridHeight = 3
         const gridWidth = 3
         const gridOffsetX = 20
@@ -180,7 +182,7 @@
                 frameInfo.innerHTML = info
             }
             function sp_episode_number(i) {
-                valeur = (i / 10) * 100
+                valeur = (i / maxEpisodes) * 100
                 $('.progress-bar').css('width', valeur + '%').attr('aria-valuenow', valeur)
             }
             function expf(a) {
@@ -227,7 +229,9 @@
             module.get_charstar = function () {
                 return stringFrom(module, instance.exports.get_charstar())
             }
+            module.setup = instance.exports.setup
             module.step = instance.exports.step
+            module.eval = instance.exports.eval
             return module
         }
 
@@ -254,6 +258,7 @@
             // var output = document.createElement("pre");
             // output.innerHTML = msg
             // document.body.appendChild(output);
+            module.setup(maxEpisodes)
             module.step()
         })
 

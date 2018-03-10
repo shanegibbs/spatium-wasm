@@ -1,5 +1,5 @@
 extern crate autograd as ag;
-#[macro_use(array)]
+// #[macro_use(array)]
 extern crate ndarray;
 extern crate ndarray_rand;
 extern crate rand;
@@ -130,25 +130,16 @@ impl<T: SpatiumSys> Spatium<T> {
             self.episode, game.step
         ));
 
-        let mut s = GameState { arr: ndarray::Array::zeros((3, 3)) };
-        s.arr[[0, 0]] = 1;
-        let action = self.network.next_action(&*sys, None, &s);
-        println!("1 DR: {:?}", action);
-
-        let mut s = GameState { arr: ndarray::Array::zeros((3, 3)) };
-        s.arr[[0, 1]] = 1;
-        let action = self.network.next_action(&*sys, None, &s);
-        println!("2 R: {:?}", action);
-
-        let mut s = GameState { arr: ndarray::Array::zeros((3, 3)) };
-        s.arr[[0, 2]] = 1;
-        let action = self.network.next_action(&*sys, None, &s);
-        println!("3 D: {:?}", action);
-
-        let mut s = GameState { arr: ndarray::Array::zeros((3, 3)) };
-        s.arr[[1, 2]] = 1;
-        let action = self.network.next_action(&*sys, None, &s);
-        println!("4 D: {:?}", action);
+        for y in 0..3 {
+            for x in 0..3 {
+                let mut s = GameState {
+                    arr: ndarray::Array::zeros((3, 3)),
+                };
+                s.arr[[y, x]] = 1;
+                let action = self.network.next_action(&*sys, None, &s);
+                println!("{}, ({},{}) = {:?}", s.arr, y, x, action);
+            }
+        }
 
         // check if this was the last episode
         if self.episode >= self.max_episodes {
