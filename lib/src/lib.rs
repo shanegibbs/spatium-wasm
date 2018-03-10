@@ -1,22 +1,21 @@
 extern crate autograd as ag;
+#[macro_use(array)]
 extern crate ndarray;
 extern crate ndarray_rand;
-extern crate pcg_rand;
 extern crate rand;
 
 mod action;
 mod game;
 mod network;
+mod rng;
+
+pub use rng::RcRng;
 
 use game::{Game, GameState};
 use action::*;
 use network::*;
 
 use std::sync::{Arc, RwLock, RwLockReadGuard};
-
-use pcg_rand::Pcg32Basic;
-
-use rand::SeedableRng;
 
 pub trait SpatiumSys {
     fn info(&self, &str) {}
@@ -64,22 +63,28 @@ impl<T: SpatiumSys> SpatiumSysHelper<T> {
 
 pub struct Spatium<T: SpatiumSys> {
     sys: SpatiumSysHelper<T>,
-    rng: Pcg32Basic,
     episode: usize,
+    max_episodes: usize,
     step: usize,
-    network: QTable,
+    network: Box<Network + Send>,
     game: Option<Game>,
     last_state: Option<(GameState, usize, bool)>,
 }
 
 impl<T: SpatiumSys> Spatium<T> {
-    pub fn new(sys: T) -> Spatium<T> {
+    pub fn new(rng: RcRng, sys: T, max_episodes: usize) -> Spatium<T> {
+        let network: Box<Network + Send> = if "snn" == "qtable" {
+            Box::new(network::qtable::new())
+        } else {
+            // Box::new(network::qtable::new())
+            Box::new(network::single_layer::new(9, 4, rng))
+        };
         let n = Spatium {
             sys: SpatiumSysHelper::new(sys),
-            rng: Pcg32Basic::from_seed([42, 42]),
             step: 0,
-            network: QTable::new(),
+            network: network as Box<Network + Send>,
             episode: 0,
+            max_episodes: max_episodes,
             game: None,
             last_state: None,
         };
@@ -125,15 +130,35 @@ impl<T: SpatiumSys> Spatium<T> {
             self.episode, game.step
         ));
 
+        let mut s = GameState { arr: ndarray::Array::zeros((3, 3)) };
+        s.arr[[0, 0]] = 1;
+        let action = self.network.next_action(&*sys, None, &s);
+        println!("1 DR: {:?}", action);
+
+        let mut s = GameState { arr: ndarray::Array::zeros((3, 3)) };
+        s.arr[[0, 1]] = 1;
+        let action = self.network.next_action(&*sys, None, &s);
+        println!("2 R: {:?}", action);
+
+        let mut s = GameState { arr: ndarray::Array::zeros((3, 3)) };
+        s.arr[[0, 2]] = 1;
+        let action = self.network.next_action(&*sys, None, &s);
+        println!("3 D: {:?}", action);
+
+        let mut s = GameState { arr: ndarray::Array::zeros((3, 3)) };
+        s.arr[[1, 2]] = 1;
+        let action = self.network.next_action(&*sys, None, &s);
+        println!("4 D: {:?}", action);
+
         // check if this was the last episode
-        if self.episode >= 10 {
+        if self.episode >= self.max_episodes {
             self.sys.info(format!("All episodes executed"));
             return false;
         }
         return true;
     }
     fn reset_game(&mut self) {
-        let (game, s, r, done) = Game::new();
+        let (game, s, r, done) = Game::new(40);
         self.game = Some(game);
         self.last_state = Some((s, r, done));
         self.step += 1;
@@ -153,15 +178,17 @@ impl<T: SpatiumSys> Spatium<T> {
         state
     }
     // do AI stuff and call self.execute_action
-    fn process(&mut self, game: Game, s: GameState) {
-        let action = self.network.next_action(&mut self.rng, &s);
+    fn process(&mut self, rng: RcRng, game: Game, s: GameState) {
+        let sys = self.sys.clone();
+        let sys = sys.read();
+        let action = self.network.next_action(&*sys, Some(rng.clone()), &s);
 
         // render the current game and the decided action
         let (s1, r, done) = self.execute_action(game, &action);
 
-        self.network.result(s, &action, &s1, r, done);
+        self.network.result(&*sys, s, &action, &s1, r, done);
     }
-    pub fn step(&mut self) -> bool {
+    pub fn step(&mut self, rng: RcRng) -> bool {
         // render final state
         if self.is_final_state() {
             // returns false on end of final episode
@@ -178,7 +205,7 @@ impl<T: SpatiumSys> Spatium<T> {
         let (s, _last_r, _) = self.last_state.take().unwrap();
 
         // process step
-        self.process(game, s);
+        self.process(rng, game, s);
 
         true
     }
@@ -190,7 +217,7 @@ mod tests {
 
     use super::*;
 
-    struct SpatiumDummy;
+    pub struct SpatiumDummy;
 
     impl SpatiumSys for SpatiumDummy {
         fn info(&self, s: &str) {
@@ -203,7 +230,8 @@ mod tests {
 
     #[test]
     fn it_works() {
-        let mut spat = Spatium::new(SpatiumDummy {});
-        while spat.step() {}
+        let rng = RcRng::new(Box::new(rand::weak_rng()));
+        let mut spat = Spatium::new(rng.clone(), SpatiumDummy {}, 300);
+        while spat.step(rng.clone()) {}
     }
 }

@@ -183,6 +183,18 @@
                 valeur = (i / 10) * 100
                 $('.progress-bar').css('width', valeur + '%').attr('aria-valuenow', valeur)
             }
+            function expf(a) {
+                // console.log("call expf")
+                return Math.exp(a)
+            }
+            function logf(a) {
+                // console.log("call logf")
+                return Math.log(a)
+            }
+            function Math_tanh(a) {
+                // console.log("call Math_tanh")
+                return Math.tanh(a)
+            }
 
             let imports = {
                 sp_print,
@@ -191,6 +203,9 @@
                 sp_draw_sprite,
                 sp_frame_info,
                 sp_episode_number,
+                expf,
+                logf,
+                Math_tanh,
             }
             return { env: imports }
         }
@@ -200,9 +215,9 @@
                 response.arrayBuffer()
             ).then(bytes =>
                 WebAssembly.instantiate(bytes, importObject)
-                ).then(results =>
-                    results.instance
-                ).then(buildModule);
+            ).then(results =>
+                results.instance
+            ).then(buildModule);
         }
 
         function buildModule(instance) {
@@ -234,7 +249,7 @@
             return Number(Math.round(value + 'e' + decimals) + 'e-' + decimals)
         }
 
-        fetchAndBuild("spatium.wasm", env()).then(module => {
+        fetchAndBuild("spatium_wasm.wasm", env()).then(module => {
             // const msg = module.get_charstar()
             // var output = document.createElement("pre");
             // output.innerHTML = msg
@@ -247,8 +262,8 @@
         }
 
         function run() {
-            const fps = 10
-            const targetDelta = 1000 / 10
+            const fps = 30
+            const targetDelta = 1000 / fps
             let actualFps = 0;
 
             let prevTimestamp = null;

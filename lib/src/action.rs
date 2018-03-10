@@ -8,6 +8,17 @@ pub enum Action {
     Left,
 }
 
+impl Action {
+    pub fn all() -> Vec<Action> {
+        use Action::*;
+        vec![Up, Right, Down, Left]
+    }
+    pub fn vec(&self) -> Vec<f32> {
+        let i: usize = self.into();
+        (0..4).map(|n| if n == i { 1. } else { 0. }).collect()
+    }
+}
+
 impl fmt::Display for Action {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {

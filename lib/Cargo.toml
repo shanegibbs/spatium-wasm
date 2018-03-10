@@ -7,5 +7,4 @@ authors = ["Shane Gibbs <shane@hands.net.nz>"]
 ndarray = "0.10.0"
 ndarray-rand = "0.6.1"
 rand = "*"
-pcg_rand = "0.7.1"
 autograd = { path = "../../rust-autograd" }

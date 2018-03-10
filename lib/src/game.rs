@@ -24,6 +24,7 @@ pub struct GameState {
 
 pub struct Game {
     pub step: usize,
+    pub max_steps: usize,
     pub width: usize,
     pub height: usize,
     pub done: bool,
@@ -34,9 +35,10 @@ pub struct Game {
 }
 
 impl Game {
-    pub fn new() -> (Game, GameState, usize, bool) {
+    pub fn new(max_steps: usize) -> (Game, GameState, usize, bool) {
         let mut n = Game {
             step: 0,
+            max_steps: max_steps,
             width: 3,
             height: 3,
             done: false,
@@ -71,6 +73,10 @@ impl Game {
         }
 
         self.step += 1;
+        if self.step >= self.max_steps {
+            self.done = true;
+        }
+
         (self.build_state(), self.reward, self.done)
     }
     pub fn step<T: SpatiumSys>(
