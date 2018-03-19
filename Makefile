@@ -3,7 +3,7 @@ RUST_VERSION=nightly-2018-03-01
 build:
 	bash -c "find target -name '*.wasm' |xargs rm -f"
 	cargo  +nightly build --target wasm32-unknown-unknown --release
-	wasm-gc target/wasm32-unknown-unknown/release/spatium_wasm.wasm html/spatium.wasm
+	wasm-gc target/wasm32-unknown-unknown/release/spatium_wasm.wasm docs/spatium.wasm
 
 build-debug:
 	bash -c "find target -name '*.wasm' |xargs rm -f"
@@ -46,4 +46,4 @@ setup-tools:
 	cargo install --force --git https://github.com/alexcrichton/wasm-gc
 
 run:
-	bash -c "cd html && python -m SimpleHTTPServer"
+	bash -c "cd docs && python -m SimpleHTTPServer"
