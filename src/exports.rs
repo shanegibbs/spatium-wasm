@@ -17,6 +17,11 @@ pub extern "C" fn dealloc(ptr: *mut c_void, cap: usize) {
 }
 
 #[no_mangle]
+pub extern "C" fn ping() -> usize {
+    7
+}
+
+#[no_mangle]
 pub extern "C" fn setup(max_episodes: usize) {
     ::setup(max_episodes)
 }

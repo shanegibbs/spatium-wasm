@@ -12,7 +12,7 @@ mod spatium_js_sys;
 use std::sync::Mutex;
 use rand::SeedableRng;
 
-use spatium_lib::{RcRng, Spatium};
+use spatium_lib::{RcRng, Spatium, SpatiumSys};
 use spatium_js_sys::SpatiumJsSys;
 
 type SpatiumJs = Mutex<Option<Spatium<SpatiumJsSys>>>;
@@ -24,6 +24,7 @@ lazy_static! {
 fn setup(max_episodes: usize) {
     let mut data = DATA.lock().unwrap();
     *data = Some(Spatium::new(rng(), SpatiumJsSys::new(), max_episodes));
+    SpatiumJsSys::new().info("Setup complete");
 }
 
 fn random_u64() -> u64 {
@@ -44,6 +45,9 @@ fn step() -> bool {
     // true
     match DATA.lock().unwrap().as_mut() {
         Some(data) => data.step(rng()),
-        None => panic!("Run setup() first"),
+        None => {
+            SpatiumJsSys::new().fatal("Run spatium::setup() first");
+            false
+        }
     }
 }

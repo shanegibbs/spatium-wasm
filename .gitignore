@@ -1,3 +1,6 @@
 target/
 **/*.rs.bk
 venv
+/temp
+node_modules
+*.log

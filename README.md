@@ -10,6 +10,8 @@
 
 #### Machine Learning
 
+* [Human-level control through deep reinforcement
+learning](http://www.davidqiu.com:8888/research/nature14236.pdf)
 * [\[PDF\] Reinforcement Learning:
 An Introduction](http://ufal.mff.cuni.cz/~straka/courses/npfl114/2016/sutton-bookdraft2016sep.pdf)
 * https://medium.com/emergent-future/simple-reinforcement-learning-with-tensorflow-part-0-q-learning-with-tables-and-neural-networks-d195264329d0
@@ -37,3 +39,11 @@ An Introduction](http://ufal.mff.cuni.cz/~straka/courses/npfl114/2016/sutton-boo
 * https://github.com/killercup/wasm-experiments
 * https://github.com/aochagavia/rocket_wasm
 * https://www.hellorust.com/demos/canvas/index.html
+
+#### JS
+
+* https://yarnpkg.com/en/
+* https://webpack.js.org
+* https://reactjs.org/
+* https://redux.js.org/
+* https://babeljs.io/

@@ -19,6 +19,7 @@ use std::sync::{Arc, RwLock, RwLockReadGuard};
 
 pub trait SpatiumSys {
     fn info(&self, &str) {}
+    fn fatal(&self, e: &str) { panic!(format!("[fatal] {}", e)) }
     fn random(&mut self) -> f64;
     fn clear_screen(&self) {}
     fn draw_sprite(&self, _i: usize, _x: usize, _y: usize) {}
@@ -73,7 +74,7 @@ pub struct Spatium<T: SpatiumSys> {
 
 impl<T: SpatiumSys> Spatium<T> {
     pub fn new(rng: RcRng, sys: T, max_episodes: usize) -> Spatium<T> {
-        let network: Box<Network + Send> = if "snn" == "qtable" {
+        let network: Box<Network + Send> = if "" == "qtable" {
             Box::new(network::qtable::new())
         } else {
             // Box::new(network::qtable::new())
@@ -130,15 +131,37 @@ impl<T: SpatiumSys> Spatium<T> {
             self.episode, game.step
         ));
 
-        for y in 0..3 {
-            for x in 0..3 {
+        let states = vec![
+            (0, 0, Action::Right),
+            (0, 1, Action::Right),
+            (1, 0, Action::Down),
+            (0, 2, Action::Down),
+            (2, 0, Action::Right),
+            (1, 2, Action::Down),
+            (2, 1, Action::Right),
+        ];
+
+        if game.step < 40 {
+            let mut score = 0;
+            for (y, x, a) in states {
+                if (y == 1 && x == 1) || (y == 2 && x == 2) {
+                    continue;
+                }
                 let mut s = GameState {
                     arr: ndarray::Array::zeros((3, 3)),
                 };
                 s.arr[[y, x]] = 1;
-                let action = self.network.next_action(&*sys, None, &s);
-                println!("{}, ({},{}) = {:?}", s.arr, y, x, action);
+                let (action, val) = self.network.next_action(&*sys, None, &s);
+                let mut good = action == a;
+                if y == 0 && x == 0 && action == Action::Down {
+                    good = true;
+                }
+                if good {
+                    score += 1;
+                }
+                println!("({},{}) = {:?} ({:?}), {} - val={}", y, x, action, a, good, val);
             }
+            println!("Score: {}", score);
         }
 
         // check if this was the last episode
@@ -172,12 +195,12 @@ impl<T: SpatiumSys> Spatium<T> {
     fn process(&mut self, rng: RcRng, game: Game, s: GameState) {
         let sys = self.sys.clone();
         let sys = sys.read();
-        let action = self.network.next_action(&*sys, Some(rng.clone()), &s);
+        let (action, _val) = self.network.next_action(&*sys, Some(rng.clone()), &s);
 
         // render the current game and the decided action
         let (s1, r, done) = self.execute_action(game, &action);
 
-        self.network.result(&*sys, s, &action, &s1, r, done);
+        self.network.result(&*sys, rng.clone(), s, &action, &s1, r, done);
     }
     pub fn step(&mut self, rng: RcRng) -> bool {
         // render final state

@@ -13,6 +13,9 @@ impl SpatiumSys for SpatiumJsSys {
     fn info(&self, s: &str) {
         externs::print(format!("[info] {}", s).as_str())
     }
+    fn fatal(&self, s: &str) {
+        externs::print(format!("[fatal] {}", s).as_str())
+    }
     fn random(&mut self) -> f64 {
         externs::random()
     }

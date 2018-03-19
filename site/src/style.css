@@ -1,0 +1,12 @@
+.hello {
+  color: red;
+}
+
+.canvas {
+  _border: 1px solid red;
+}
+
+.terminal {
+  width: 320px;
+  height: 240px;
+}

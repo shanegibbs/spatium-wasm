@@ -1,4 +1,4 @@
-use ndarray::{Array, Ix2};
+use ndarray::prelude::*;
 use {SpatiumSys, SpatiumSysHelper};
 use action::*;
 
@@ -20,6 +20,13 @@ fn sprite(x: usize, y: usize) -> Sprite {
 #[derive(Clone, Debug)]
 pub struct GameState {
     pub arr: Array<u8, Ix2>,
+}
+
+impl<'a> Into<ArrayD<f32>> for &'a GameState {
+    fn into(self) -> ArrayD<f32> {
+        let x = self.arr.iter().map(|n| *n as f32).collect();
+        Array::from_shape_vec(IxDyn(&[1, 9]), x).unwrap()
+    }
 }
 
 pub struct Game {

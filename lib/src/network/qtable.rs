@@ -26,7 +26,7 @@ impl QTable {
 }
 
 impl Network for QTable {
-    fn next_action(&mut self, _: &SpatiumSys, rng: Option<RcRng>, s: &GameState) -> Action {
+    fn next_action(&mut self, _: &SpatiumSys, rng: Option<RcRng>, s: &GameState) -> (Action, f32) {
         let q_val = self.q
             .get(&s.arr)
             .map(|a| a.to_owned())
@@ -40,10 +40,19 @@ impl Network for QTable {
             final_q_val = final_q_val + noise;
         }
 
-        let action_i = argmax(&final_q_val).0;
-        action_i.into()
+        let (action_i, maxq) = argmax(&final_q_val);
+        (action_i.into(), maxq)
     }
-    fn result(&mut self, _sys: &SpatiumSys, s: GameState, a: &Action, s1: &GameState, r: usize, _done: bool) {
+    fn result(
+        &mut self,
+        _sys: &SpatiumSys,
+        _rng: RcRng,
+        s: GameState,
+        a: &Action,
+        s1: &GameState,
+        r: usize,
+        _done: bool,
+    ) {
         let mut q_val = self.q
             .get(&s.arr)
             .map(|a| a.to_owned())
