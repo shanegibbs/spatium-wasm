@@ -1,24 +1,26 @@
 import React from 'react'
 import Plotly from 'plotly.js'
 import Spatium from './spatium'
-// import { Terminal } from 'xterm'
-// import * as fit from 'xterm/lib/addons/fit/fit'
+import { Terminal } from 'xterm'
+import * as fit from 'xterm/lib/addons/fit/fit'
 
 export default class Welcome extends React.Component {
   constructor(props) {
-    super(props);
-    this.clickStep = this.clickStep.bind(this);
-    this.clickRun = this.clickRun.bind(this);
-    this.state = { ready: false, running: false };
+    super(props)
+    this.clickStep = this.clickStep.bind(this)
+    this.clickRun = this.clickRun.bind(this)
+    this.handleFpsChange = this.handleFpsChange.bind(this)
+
+    this.state = { ready: false, running: false, fps: 30 }
   }
   componentDidMount() {
-    // Terminal.applyAddon(fit)
-    // var term = new Terminal()
-    // term.open(this.refs.terminal)
-    // term.fit()
+    Terminal.applyAddon(fit)
+    var term = new Terminal()
+    term.open(this.refs.terminal)
+    term.fit()
 
     Spatium.new(this.refs.canvas, this.refs.frameInfo, (log) => {
-      // term.write(log + "\r\n")
+      term.write(log + "\r\n")
     }, spatium => {
       spatium.step()
       this.spatium = spatium
@@ -65,8 +67,6 @@ export default class Welcome extends React.Component {
       this.setState({ running: true })
     }
 
-    const fps = 240
-    const targetDelta = 1000 / fps
     let actualFps = 0;
 
     let prevTimestamp = null;
@@ -79,6 +79,15 @@ export default class Welcome extends React.Component {
         prevTimestamp = timestamp
       }
 
+      const fps = this.state.fps
+      if (fps == 0) {
+        var i = 10
+        while (i-- > 0 && this.spatium.step()) { }
+        requestAnimationFrame(gameLoopStep)
+        return
+      }
+      const targetDelta = 1000 / fps
+
       let delta = timestamp - prevTimestamp;
       // console.log(delta);
 
@@ -89,8 +98,9 @@ export default class Welcome extends React.Component {
 
       if (this.spatium.step()) {
         prevTimestamp = timestamp
-        // actualFps = round(1000 / delta, 2)
+        actualFps = Math.round(1000 / delta, 2)
         // console.log("fps " + actualFps)
+
         requestAnimationFrame(gameLoopStep)
       } else {
         console.log("Game loop ended")
@@ -99,18 +109,25 @@ export default class Welcome extends React.Component {
 
     gameLoopStep()
   }
+  handleFpsChange(e) {
+    const newValue = e.target.value
+    console.log(newValue)
+    this.setState((state, p) => {
+      state.fps = newValue
+      return state
+    })
+  }
   render() {
     return (
       <div>
         <div className="row">
-          {/* <div className="col">
-            <div ref="terminal" className="terminal"></div>
-          </div> */}
+          <div className="col">
+            <div ref="terminal"></div>
           </div>
+        </div>
         <div className="row">
           <div className="col">
 
-            <h2>Console</h2>
             <p>Source code @
                   <a href="https://github.com/shanegibbs/spatium-wasm">shanegibbs/spatium-wasm</a>
             </p>
@@ -118,27 +135,44 @@ export default class Welcome extends React.Component {
             <canvas ref="canvas" className="canvas"></canvas>
 
           </div>
-          <div className="col">
-            <div className="panel panel-default">
-              <div className="panel-body">
-                <button className="btn btn-success" disabled={!this.state.ready} onClick={this.clickRun}>Start</button>
-                <button className="btn btn-danger" disabled={!this.state.ready} onClick={this.clickRun}>Stop</button>
-                <button className="btn btn-warning" disabled={!this.state.ready} onClick={this.clickStep}>Step</button>
-              </div>
-            </div>
-            <div className="progress">
-              <div id="run-progress" className="progress-bar" role="progressbar" aria-valuenow="00" aria-valuemin="0" aria-valuemax="100" style={{ width: 0 }}>
-              </div>
-            </div>
-            <p>Output</p>
-            <pre ref="frameInfo" className="frame-info"></pre>
+
+          <div className="col-8">
+            <div ref="graph"></div>
           </div>
+
         </div>
 
         <div className="row">
+
           <div className="col">
-            <div ref="graph"></div>
+            <div className="panel panel-default">
+              <div className="panel-body">
+                <div className="btn-group" role="group">
+                  <button className="btn btn-success" disabled={!this.state.ready || this.state.running} onClick={this.clickRun}>Start</button>
+                  <button className="btn btn-warning" disabled={!this.state.ready || this.state.running} onClick={this.clickStep}>Step</button>
+                  <button className="btn btn-danger" disabled={!this.state.ready || !this.state.running} onClick={this.clickRun}>Stop</button>
+                </div>
+              </div>
+            </div>
+
+            <br />
+
+            <div className="form-group">
+              <input type="text" className="form-control" placeholder="FPS" value={this.state.fps} onChange={this.handleFpsChange} />
+              <small id="fpsHelp" className="form-text text-muted">Frames per second. 0 for max.</small>
+            </div>
+
+            {/* <div className="progress">
+              <div id="run-progress" className="progress-bar" role="progressbar" aria-valuenow="00" aria-valuemin="0" aria-valuemax="100" style={{ width: 0 }}>
+              </div>
+            </div> */}
+            <pre ref="frameInfo" className="frame-info"></pre>
           </div>
+
+          <div className="col-8">
+            <div ref="terminal"></div>
+          </div>
+
         </div>
       </div>
     );

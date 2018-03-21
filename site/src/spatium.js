@@ -1,3 +1,6 @@
+const maxEpisodes = 3000
+const renderOn = true
+
 const Spatium = {}
 
 function stringFrom(module, cstr) {
@@ -15,8 +18,6 @@ function stringFrom(module, cstr) {
 }
 
 function env(spatium, canvas, frameInfo, logger) {
-  const maxEpisodes = 300
-
   const gridHeight = 3
   const gridWidth = 3
   const gridOffsetX = 20
@@ -45,6 +46,9 @@ function env(spatium, canvas, frameInfo, logger) {
   ctx.translate(0.5, 0.5)
 
   function sp_clear_screen() {
+    if (!renderOn) {
+      return
+    }
     // console.info("> clear screen")
 
     // clear
@@ -73,7 +77,9 @@ function env(spatium, canvas, frameInfo, logger) {
     ctx.stroke()
   }
   function sp_draw_sprite(i, x, y) {
-    // console.info("> draw agent " + x + ", " + y)
+    if (!renderOn) {
+      return
+    }
 
     if (i == 0) {
       ctx.fillStyle = "blue"
@@ -177,7 +183,7 @@ Spatium.new = (canvas, frameInfo, logger, readyCallback) => {
     spatium.setup = instance.exports.setup
     spatium.step = instance.exports.step
 
-    spatium.setup(300)
+    spatium.setup(maxEpisodes)
 
     readyCallback(spatium)
   })
