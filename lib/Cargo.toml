@@ -8,3 +8,6 @@ ndarray = "0.10.0"
 ndarray-rand = "0.6.1"
 rand = "*"
 autograd = { path = "../../rust-autograd" }
+serde = "*"
+serde_json = "*"
+serde_derive = "*"

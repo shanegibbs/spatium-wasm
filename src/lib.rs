@@ -3,6 +3,7 @@ extern crate lazy_static;
 extern crate pcg_rand;
 extern crate rand;
 extern crate spatium_lib;
+extern crate serde_json;
 
 mod externs;
 pub mod exports;
@@ -39,15 +40,18 @@ fn rng() -> RcRng {
     RcRng::new(Box::new(rng))
 }
 
-fn step() -> bool {
+fn step() -> String {
     // let mut s = Spatium::new(rng(), SpatiumJsSys::new(), 250);
     // s.step(rng());
     // true
     match DATA.lock().unwrap().as_mut() {
-        Some(data) => data.step(rng()),
+        Some(data) => {
+            let result = data.step(rng());
+            serde_json::to_string(&result).unwrap()
+        },
         None => {
             SpatiumJsSys::new().fatal("Run spatium::setup() first");
-            false
+            String::from("{\"done\": true}")
         }
     }
 }

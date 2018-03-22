@@ -108,18 +108,45 @@ function env(spatium, canvas, frameInfo, logger) {
     // $('.progress-bar').css('width', valeur + '%').attr('aria-valuenow', valeur)
   }
   function expf(a) {
-    // console.log("call expf")
     return Math.exp(a)
   }
   function logf(a) {
-    // console.log("call logf")
     return Math.log(a)
   }
+  function powf(a) {
+    return Math.pow(a)
+  }
   function Math_tanh(a) {
-    // console.log("call Math_tanh")
     return Math.tanh(a)
   }
-
+  function Math_atan(a) {
+    return Math.atan(a)
+  }
+  function Math_log1p(a) {
+    return Math.log1p(a)
+  }
+  function Math_sinh(a) {
+    return Math.sinh(a)
+  }
+  function Math_asin(a) {
+    return Math.asin(a)
+  }
+  function cosf(a) {
+    return Math.cosf(a)
+  }
+  function Math_cosh(a) {
+    return Math.cosh(a)
+  }
+  function sinf(a) {
+    return Math.sinf(a)
+  }
+  function Math_tan(a) {
+    return Math.tan(a)
+  }
+  function Math_acos(a) {
+    return Math.acos(a)
+  }
+  
   let imports = {
     sp_print,
     sp_random,
@@ -129,7 +156,17 @@ function env(spatium, canvas, frameInfo, logger) {
     sp_episode_number,
     expf,
     logf,
+    powf,
     Math_tanh,
+    Math_atan,
+    Math_log1p,
+    Math_sinh,
+    Math_asin,
+    cosf,
+    Math_cosh,
+    sinf,
+    Math_tan,
+    Math_acos,
   }
   return { env: imports }
 }
@@ -181,7 +218,9 @@ Spatium.new = (canvas, frameInfo, logger, readyCallback) => {
     spatium.dealloc = instance.exports.dealloc
 
     spatium.setup = instance.exports.setup
-    spatium.step = instance.exports.step
+    spatium.step = () => {
+      return JSON.parse(stringFrom(spatium, instance.exports.step()))
+    }
 
     spatium.setup(maxEpisodes)
 

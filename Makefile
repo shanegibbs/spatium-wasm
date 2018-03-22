@@ -9,10 +9,9 @@ build-debug:
 	bash -c "find target -name '*.wasm' |xargs rm -f"
 	cargo build --target wasm32-unknown-unknown
 	cp \
-		target/wasm32-unknown-unknown/debug/spatium_wasm.wasm \
 	    target/wasm32-unknown-unknown/debug/deps/spatium_wasm.wasm.map \
-		html
-	# wasm-gc target/wasm32-unknown-unknown/debug/spatium_wasm.wasm html/spatium.wasm
+		docs
+	wasm-gc target/wasm32-unknown-unknown/debug/spatium_wasm.wasm docs/spatium_wasm.wasm
 
 build-watch:
 	./scripts/build-watch.sh

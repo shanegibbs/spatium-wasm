@@ -30,29 +30,12 @@ export default class Welcome extends React.Component {
       })
     })
 
-    var trace1 = {
-      x: [1, 2, 3, 4],
-      y: [10, 15, 13, 17],
-      type: 'scatter'
-    };
-
-    var trace2 = {
-      x: [1, 2, 3, 4],
-      y: [16, 5, 11, 9],
-      type: 'scatter'
-    };
-
-    var data = [trace1, trace2];
-
-    Plotly.newPlot(this.refs.graph, data);
-
-    data[0].x.push(5)
-    data[0].y.push(20)
-
-    data[1].x.push(5)
-    data[1].y.push(-5)
-
-    Plotly.restyle(this.refs.graph, '', data)
+    this.data = [{
+      x: [],
+      y: [],
+      type: 'scatter',
+    }]
+    Plotly.newPlot(this.refs.graph, this.data);
   }
   clickStep() {
     this.spatium.step()
@@ -80,23 +63,24 @@ export default class Welcome extends React.Component {
       }
 
       const fps = this.state.fps
-      if (fps == 0) {
-        var i = 10
-        while (i-- > 0 && this.spatium.step()) { }
-        requestAnimationFrame(gameLoopStep)
-        return
-      }
       const targetDelta = 1000 / fps
 
       let delta = timestamp - prevTimestamp;
-      // console.log(delta);
 
-      if (delta <= targetDelta) {
+      if (fps != 0 && delta <= targetDelta) {
         requestAnimationFrame(gameLoopStep)
         return
       }
 
-      if (this.spatium.step()) {
+      const step = this.spatium.step();
+
+      if (step.hasOwnProperty("episodeResult")) {
+        this.data[0].x.push(this.data[0].x.length)
+        this.data[0].y.push(step.episodeResult.score)
+        Plotly.restyle(this.refs.graph, '', this.data)
+      }
+
+      if (!step.done) {
         prevTimestamp = timestamp
         actualFps = Math.round(1000 / delta, 2)
         // console.log("fps " + actualFps)
@@ -137,6 +121,8 @@ export default class Welcome extends React.Component {
           </div>
 
           <div className="col-8">
+            <h4>Steps to hit target</h4>
+            <p>(lower is better)</p>
             <div ref="graph"></div>
           </div>
 

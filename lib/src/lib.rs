@@ -3,6 +3,10 @@ extern crate autograd as ag;
 extern crate ndarray;
 extern crate ndarray_rand;
 extern crate rand;
+extern crate serde;
+#[macro_use]
+extern crate serde_derive;
+extern crate serde_json;
 
 mod action;
 mod game;
@@ -17,9 +21,25 @@ use network::*;
 
 use std::sync::{Arc, RwLock, RwLockReadGuard};
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EpisodeResult {
+    score: f32,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StepResult {
+    done: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    episode_result: Option<EpisodeResult>,
+}
+
 pub trait SpatiumSys {
     fn info(&self, &str) {}
-    fn fatal(&self, e: &str) { panic!(format!("[fatal] {}", e)) }
+    fn fatal(&self, e: &str) {
+        panic!(format!("[fatal] {}", e))
+    }
     fn random(&mut self) -> f64;
     fn clear_screen(&self) {}
     fn draw_sprite(&self, _i: usize, _x: usize, _y: usize) {}
@@ -117,7 +137,7 @@ impl<T: SpatiumSys> Spatium<T> {
     fn is_final_state(&self) -> bool {
         self.last_state.as_ref().map(|s| s.2).unwrap_or(false)
     }
-    fn do_final_frame(&mut self) -> bool {
+    fn do_final_frame(&mut self) -> EpisodeResult {
         let game = self.game.take().unwrap();
         self.render(&game, None);
         self.last_state = None;
@@ -159,17 +179,17 @@ impl<T: SpatiumSys> Spatium<T> {
                 if good {
                     score += 1;
                 }
-                println!("({},{}) = {:?} ({:?}), {} - val={}", y, x, action, a, good, val);
+                println!(
+                    "({},{}) = {:?} ({:?}), {} - val={}",
+                    y, x, action, a, good, val
+                );
             }
             println!("Score: {}", score);
         }
 
-        // check if this was the last episode
-        if self.episode >= self.max_episodes {
-            self.sys.info(format!("All episodes executed"));
-            return false;
+        EpisodeResult {
+            score: game.step as f32,
         }
-        return true;
     }
     fn reset_game(&mut self) {
         let (game, s, r, done) = Game::new(40);
@@ -200,13 +220,18 @@ impl<T: SpatiumSys> Spatium<T> {
         // render the current game and the decided action
         let (s1, r, done) = self.execute_action(game, &action);
 
-        self.network.result(&*sys, rng.clone(), s, &action, &s1, r, done);
+        self.network
+            .result(&*sys, rng.clone(), s, &action, &s1, r, done);
     }
-    pub fn step(&mut self, rng: RcRng) -> bool {
+    pub fn step(&mut self, rng: RcRng) -> StepResult {
         // render final state
         if self.is_final_state() {
             // returns false on end of final episode
-            return self.do_final_frame();
+
+            return StepResult {
+                done: self.episode >= self.max_episodes,
+                episode_result: Some(self.do_final_frame()),
+            };
         }
 
         // setup new game
@@ -221,7 +246,10 @@ impl<T: SpatiumSys> Spatium<T> {
         // process step
         self.process(rng, game, s);
 
-        true
+        StepResult {
+            done: false,
+            episode_result: None,
+        }
     }
 }
 
@@ -246,6 +274,15 @@ mod tests {
     fn it_works() {
         let rng = RcRng::new(Box::new(rand::weak_rng()));
         let mut spat = Spatium::new(rng.clone(), SpatiumDummy {}, 300);
-        while spat.step(rng.clone()) {}
+        loop {
+            let result = spat.step(rng.clone());
+            // println!("{}", serde_json::to_string(&result).unwrap());
+            if let Some(ref _ep_result) = result.episode_result {
+                println!("{}", serde_json::to_string(&result).unwrap());
+            }
+            if result.done {
+                break;
+            }
+        }
     }
 }

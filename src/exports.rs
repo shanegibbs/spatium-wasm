@@ -1,5 +1,7 @@
 use std::mem;
 use std::os::raw::c_void;
+use std::os::raw::*;
+use std::ffi::CString;
 
 #[no_mangle]
 pub extern "C" fn alloc(size: usize) -> *mut c_void {
@@ -27,8 +29,8 @@ pub extern "C" fn setup(max_episodes: usize) {
 }
 
 #[no_mangle]
-pub extern "C" fn step() -> bool {
-    ::step()
+pub extern "C" fn step() -> *mut c_char {
+    CString::new(::step()).unwrap().into_raw()
 }
 
 #[no_mangle]

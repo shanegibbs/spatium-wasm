@@ -11,7 +11,14 @@ extern "C" {
 }
 
 pub fn print(s: &str) {
-    let c_str = CString::new(s).unwrap();
+    let c_str = match CString::new(s) {
+        Ok(s) => s,
+        Err(e) => {
+            // fingers corssed we don't fail the error message!
+            print(&format!("print() failed: {}", e));
+            panic!(e);
+        }
+    };
     unsafe {
         sp_print(c_str.into_raw());
     }
