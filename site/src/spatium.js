@@ -1,5 +1,5 @@
 const maxEpisodes = 3000
-const renderOn = true
+var renderOn = true
 
 const Spatium = {}
 
@@ -25,10 +25,21 @@ function env(spatium, canvas, frameInfo, logger) {
   const gridStepHeight = 60
   const gridStepWidth = 60
 
-  canvas.width = (gridStepWidth * gridWidth) + (gridOffsetX * 2);
-  canvas.style.width = canvas.width + "px";
-  canvas.height = (gridStepHeight * gridHeight) + (gridOffsetY * 2);
-  canvas.style.height = canvas.height + "px";
+  var ctx = 0;
+  if (canvas != 0) {
+    canvas.width = (gridStepWidth * gridWidth) + (gridOffsetX * 2);
+    canvas.style.width = canvas.width + "px";
+    canvas.height = (gridStepHeight * gridHeight) + (gridOffsetY * 2);
+    canvas.style.height = canvas.height + "px";
+    ctx = canvas.getContext("2d");
+
+    // Draw crisp lines
+    // http://www.mobtowers.com/html5-canvas-crisp-lines-every-time/
+    ctx.translate(0.5, 0.5)
+
+  } else {
+    renderOn = false
+  }
 
   function sp_print(text) {
     text = stringFrom(spatium, text)
@@ -38,12 +49,6 @@ function env(spatium, canvas, frameInfo, logger) {
   function sp_random() {
     return Math.random()
   }
-
-  const ctx = canvas.getContext("2d");
-
-  // Draw crisp lines
-  // http://www.mobtowers.com/html5-canvas-crisp-lines-every-time/
-  ctx.translate(0.5, 0.5)
 
   function sp_clear_screen() {
     if (!renderOn) {
@@ -76,6 +81,7 @@ function env(spatium, canvas, frameInfo, logger) {
 
     ctx.stroke()
   }
+
   function sp_draw_sprite(i, x, y) {
     if (!renderOn) {
       return
@@ -99,10 +105,15 @@ function env(spatium, canvas, frameInfo, logger) {
     ctx.rect(gridOffsetX + gridStepWidth * x, gridOffsetY + gridStepHeight * y, gridStepWidth, gridStepHeight);
     ctx.stroke()
   }
+
   function sp_frame_info(info) {
+    if (frameInfo == 0) {
+      return
+    }
     info = stringFrom(spatium, info)
     frameInfo.innerHTML = info
   }
+
   function sp_episode_number(i) {
     const valeur = (i / maxEpisodes) * 100
     // $('.progress-bar').css('width', valeur + '%').attr('aria-valuenow', valeur)
@@ -146,7 +157,7 @@ function env(spatium, canvas, frameInfo, logger) {
   function Math_acos(a) {
     return Math.acos(a)
   }
-  
+
   let imports = {
     sp_print,
     sp_random,

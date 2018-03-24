@@ -4,6 +4,9 @@ import Spatium from './spatium'
 import { Terminal } from 'xterm'
 import * as fit from 'xterm/lib/addons/fit/fit'
 
+let SpatiumWorker = require("./spatium.worker.js");
+
+
 export default class Welcome extends React.Component {
   constructor(props) {
     super(props)
@@ -12,6 +15,7 @@ export default class Welcome extends React.Component {
     this.handleFpsChange = this.handleFpsChange.bind(this)
 
     this.state = { ready: false, running: false, fps: 30 }
+
   }
   componentDidMount() {
     Terminal.applyAddon(fit)
@@ -19,16 +23,16 @@ export default class Welcome extends React.Component {
     term.open(this.refs.terminal)
     term.fit()
 
-    Spatium.new(this.refs.canvas, this.refs.frameInfo, (log) => {
-      term.write(log + "\r\n")
-    }, spatium => {
-      spatium.step()
-      this.spatium = spatium
-      this.setState((state, p) => {
-        state.ready = true
-        return state
-      })
-    })
+    // Spatium.new(this.refs.canvas, this.refs.frameInfo, (log) => {
+    //   term.write(log + "\r\n")
+    // }, spatium => {
+    //   spatium.step()
+    //   this.spatium = spatium
+    //   this.setState((state, p) => {
+    //     state.ready = true
+    //     return state
+    //   })
+    // })
 
     this.data = [{
       x: [],
@@ -36,19 +40,50 @@ export default class Welcome extends React.Component {
       type: 'scatter',
     }]
     Plotly.newPlot(this.refs.graph, this.data);
+
+    this.worker = new SpatiumWorker()
+    this.worker.onmessage = event => {
+      const data = JSON.parse(event.data);
+
+      if (data.type == "log") {
+        term.write(data.message + "\r\n")
+
+      } else if (data.type == "ready") {
+        this.setState((state, p) => {
+          state.ready = true
+          return state
+        })
+
+      } else if (data.type == "result") {
+        const step = data.result
+        if (step.hasOwnProperty("episodeResult")) {
+          this.data[0].x.push(this.data[0].x.length)
+          this.data[0].y.push(step.episodeResult.score)
+          Plotly.restyle(this.refs.graph, '', this.data)
+        }
+
+      } else {
+        console.log(data)
+      }
+    }
   }
   clickStep() {
-    this.spatium.step()
+    // this.spatium.step()
+    this.worker.postMessage({ "type": "step" })
   }
   clickRun() {
 
     if (this.state.running) {
       this.setState({ running: false })
+      this.worker.postMessage({ "type": "stop" })
       return
     } else {
       this.state.running = true
       this.setState({ running: true })
+      this.worker.postMessage({ "type": "start" })
     }
+
+    return
 
     let actualFps = 0;
 
@@ -117,6 +152,10 @@ export default class Welcome extends React.Component {
             </p>
 
             <canvas ref="canvas" className="canvas"></canvas>
+            <div>
+              <strong>Step</strong> - A single turn of the game<br />
+              <strong>Episode</strong> - A complete playthrough of the game<br />
+            </div>
 
           </div>
 

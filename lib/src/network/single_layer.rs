@@ -171,6 +171,8 @@ impl Network for SingleLayerNetwork {
         if done {
             self.ep_numer += 1;
             let ep_numer = self.ep_numer as f32;
+
+            // update explore chance
             {
                 let start_ex = 1.;
                 let end_ex = 0.01;
@@ -185,6 +187,7 @@ impl Network for SingleLayerNetwork {
                 println!("{}", self.explore_chance);
             }
 
+            // update learning rate
             {
                 let start_lr = 0.1;
                 let end_lr = 0.01;
