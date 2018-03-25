@@ -215,9 +215,9 @@ export default class Welcome extends React.Component {
 
         // console.log(renderingInfo)
         this.clear_screen()
-        this.draw_sprite(0, forRender.x, forRender.y)
         this.draw_sprite(1, 1, 1)
         this.draw_sprite(2, 2, 2)
+        this.draw_sprite(0, forRender.x, forRender.y)
       }
 
       // schedule again if still running
