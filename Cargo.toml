@@ -4,6 +4,7 @@
 name = "spatium-wasm"
 version = "0.1.0"
 authors = ["Shane Gibbs <shane@hands.net.nz>"]
+build = "build.rs"
 
 [lib]
 crate-type = ["cdylib"]

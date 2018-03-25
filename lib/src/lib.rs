@@ -15,7 +15,7 @@ mod rng;
 
 pub use rng::RcRng;
 
-use game::{Game, GameState};
+use game::{Game, GameState, RenderingInfo};
 use action::*;
 use network::*;
 
@@ -30,9 +30,14 @@ pub struct EpisodeResult {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StepResult {
+    episode: usize,
+    step: usize,
+    action: String,
     done: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     episode_result: Option<EpisodeResult>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    rendering_info: Option<RenderingInfo>,
 }
 
 pub trait SpatiumSys {
@@ -229,8 +234,12 @@ impl<T: SpatiumSys> Spatium<T> {
             // returns false on end of final episode
 
             return StepResult {
+                episode: self.episode,
+                step: self.step,
+                action: "DIR".into(),
                 done: self.episode >= self.max_episodes,
                 episode_result: Some(self.do_final_frame()),
+                rendering_info: self.game.as_ref().map(|g| g.rendering_info()),
             };
         }
 
@@ -247,8 +256,12 @@ impl<T: SpatiumSys> Spatium<T> {
         self.process(rng, game, s);
 
         StepResult {
+            episode: self.episode,
+            step: self.step,
+            action: "DIR".into(),
             done: false,
             episode_result: None,
+            rendering_info: self.game.as_ref().map(|g| g.rendering_info()),
         }
     }
 }

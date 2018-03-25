@@ -1,16 +1,16 @@
-RUST_VERSION=nightly-2018-03-01
+RUST_VERSION=nightly-2018-03-24
 
 build:
 	bash -c "find target -name '*.wasm' |xargs rm -f"
-	cargo  +nightly build --target wasm32-unknown-unknown --release
+	cargo build --target wasm32-unknown-unknown --release
 	wasm-gc target/wasm32-unknown-unknown/release/spatium_wasm.wasm docs/spatium_wasm.wasm
 
 build-debug:
 	bash -c "find target -name '*.wasm' |xargs rm -f"
 	cargo build --target wasm32-unknown-unknown
-	cp \
-	    target/wasm32-unknown-unknown/debug/deps/spatium_wasm.wasm.map \
-		docs
+	# cp \
+	    # target/wasm32-unknown-unknown/debug/deps/spatium_wasm.wasm.map \
+		# docs
 	wasm-gc target/wasm32-unknown-unknown/debug/spatium_wasm.wasm docs/spatium_wasm.wasm
 
 build-watch:

@@ -19,8 +19,8 @@ pub extern "C" fn dealloc(ptr: *mut c_void, cap: usize) {
 }
 
 #[no_mangle]
-pub extern "C" fn ping() -> usize {
-    7
+pub extern "C" fn version() -> usize {
+    env!("BUILD_VERSION").parse().unwrap()
 }
 
 #[no_mangle]
@@ -36,4 +36,14 @@ pub extern "C" fn step() -> *mut c_char {
 #[no_mangle]
 pub extern "C" fn eval(_state: usize) -> [f32; 4] {
     [0., 1., 0., 1.]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_version() {
+        version();
+    }
 }

@@ -1,3 +1,5 @@
+var { DateTime } = require('luxon');
+
 const maxEpisodes = 3000
 var renderOn = true
 
@@ -222,8 +224,6 @@ Spatium.new = (canvas, frameInfo, logger, readyCallback) => {
   wasmBytes.then(bytes => WebAssembly.instantiate(bytes, env(spatium, canvas, frameInfo, logger))
   ).then(results => {
     const instance = results.instance
-    spatium.ping = instance.exports.ping
-    console.log("Ping: " + spatium.ping())
     spatium.memory = instance.exports.memory
     spatium.alloc = instance.exports.alloc
     spatium.dealloc = instance.exports.dealloc
@@ -232,6 +232,16 @@ Spatium.new = (canvas, frameInfo, logger, readyCallback) => {
     spatium.step = () => {
       return JSON.parse(stringFrom(spatium, instance.exports.step()))
     }
+    spatium.version = instance.exports.version
+
+    const version = spatium.version();
+    const date = DateTime.fromMillis(version * 1000)
+    const age = date.diffNow(["days", "hours", "minutes"])
+    console.log("Version: " + version)
+    console.log("Version: " + date.toISO())
+    console.log("Version: " + age.get("hour") + "h " +  Math.round(age.get("minute") * -1) + "m")
+
+    logger("[system] Loaded spatium module version " + date.toISO())
 
     spatium.setup(maxEpisodes)
 

@@ -41,6 +41,13 @@ pub struct Game {
     pub food: Vec<Sprite>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenderingInfo {
+    x: usize,
+    y: usize,
+}
+
 impl Game {
     pub fn new(max_steps: usize) -> (Game, GameState, usize, bool) {
         let mut n = Game {
@@ -57,6 +64,12 @@ impl Game {
         let state = n.update_state();
         n.step = 0;
         (n, state.0, state.1, state.2)
+    }
+    pub fn rendering_info(&self) -> RenderingInfo {
+        RenderingInfo {
+            x: self.agent.x,
+            y: self.agent.y,
+        }
     }
     fn build_state(&self) -> GameState {
         let mut state: Array<u8, Ix2> = Array::zeros((self.height, self.width));
