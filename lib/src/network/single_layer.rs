@@ -14,11 +14,13 @@ pub fn new(inputs: usize, outputs: usize, rng: RcRng) -> SingleLayerNetwork {
     SingleLayerNetwork::new(inputs, outputs, rng)
 }
 
+#[derive(Clone)]
 struct Experience {
     state: GameState,
     action: Action,
     reward: f32,
     next_state: GameState,
+    done: bool,
 }
 
 pub struct SingleLayerNetwork {
@@ -63,9 +65,9 @@ impl SingleLayerNetwork {
 
         let result = ag::eval(&[&a, &zz, &max], &[(&x, &x_val)]);
 
-        let a_val = result[0][[0]];
-        let q_val = result[1].clone();
-        let max_q = result[2][[0]];
+        let a_val = result[0].clone().expect("eval a_val")[[0]];
+        let q_val = result[1].clone().expect("eval q_val").clone();
+        let max_q = result[2].clone().expect("eval max_q")[[0]];
 
         assert!(
             a_val < 4.,
@@ -108,8 +110,41 @@ impl SingleLayerNetwork {
         ag::run(&update_ops, feeds);
 
         let new_vars = ag::eval(&[&w, &b], &[]);
-        self.w = new_vars[0].clone();
-        self.b = new_vars[1].clone();
+        self.w = new_vars[0].clone().expect("run_update w");
+        self.b = new_vars[1].clone().expect("run_update b");
+    }
+    fn update_variables(&mut self) {
+        let ep_numer = self.ep_numer as f32;
+
+        // update explore chance
+        {
+            let start_ex = 1.;
+            let end_ex = 0.1;
+            let final_ex_ep = 290;
+            if self.ep_numer > final_ex_ep {
+                self.explore_chance = end_ex;
+            } else {
+                let per_frame_loss = (start_ex - end_ex) / final_ex_ep as f32;
+                let ex = start_ex - (ep_numer * per_frame_loss);
+                self.explore_chance = ex;
+            }
+            // println!("expore_chance: {}", self.explore_chance);
+        }
+
+        // update learning rate
+        {
+            let start_lr = 0.1;
+            let end_lr = 0.01;
+            let final_lr_ep = 290;
+            if self.ep_numer > final_lr_ep {
+                self.sgd_lr = end_lr;
+            } else {
+                let per_frame_loss = (start_lr - end_lr) / final_lr_ep as f32;
+                let ex = start_lr - (ep_numer * per_frame_loss);
+                self.sgd_lr = ex;
+            }
+            // println!("lr: {}", self.sgd_lr);
+        }
     }
 }
 
@@ -138,69 +173,67 @@ impl Network for SingleLayerNetwork {
     fn result(
         &mut self,
         sys: &SpatiumSys,
-        _rng: RcRng,
+        mut rng: RcRng,
         s: GameState,
         a: &Action,
         s1: &GameState,
         r: usize,
         done: bool,
     ) {
+        let experience_buf_size = 300;
+        let y = 0.99;
+
         // update expierence buffer
         self.experience_buf.push(Experience {
             state: s.clone(),
             action: *a,
             reward: r as f32,
             next_state: s1.to_owned(),
+            done: done,
         });
-        if self.experience_buf.len() > 300 {
+        if self.experience_buf.len() > experience_buf_size {
             self.experience_buf.remove(0);
         }
 
-        let y = 0.99;
+        if self.experience_buf.len() >= experience_buf_size {
+            let minibatch_size = 30;
 
-        let (a_val, q_val, _) = self.last_action.clone(); // self.run_network(sys, (&s).into());
-        let (_, _, q1_max) = self.run_network(sys, s1.into());
+            let mut minibatch: Vec<Experience> = vec![];
+            for _ in 0..minibatch_size {
+                let ex = rng.choose(&self.experience_buf).unwrap().to_owned();
+                minibatch.push(ex);
+            }
+            let minibatch: Vec<_> = minibatch
+                .into_iter()
+                .map(|ex| {
+                    let reward = ex.reward as f32 / 10.;
+                    let s1: ArrayD<f32> = (&ex.state).into();
+                    let s2: ArrayD<f32> = (&ex.next_state).into();
 
-        let mut target_q = q_val;
-        assert_eq!(target_q.shape(), &[1, 4]);
+                    let (_, q_val, _) = self.run_network(sys, s1.clone());
+                    let (_, _, q1_max) = self.run_network(sys, s2);
+                    let mut target_q = q_val;
+                    assert_eq!(target_q.shape(), &[1, 4]);
 
-        target_q[[0, a_val as usize]] = (r as f32 / 10.) + (y * q1_max);
+                    let action_i: usize = (&ex.action).into();
+                    target_q[[0, action_i]] = reward + (y * q1_max);
 
-        self.run_update((&s).into(), target_q);
+                    if ex.done {
+                        target_q[[0, action_i]] = reward;
+                    }
+
+                    (s1, target_q)
+                })
+                .collect();
+
+            for (s1, target_q) in minibatch.into_iter() {
+                self.run_update(s1, target_q);
+            }
+        }
 
         if done {
             self.ep_numer += 1;
-            let ep_numer = self.ep_numer as f32;
-
-            // update explore chance
-            {
-                let start_ex = 1.;
-                let end_ex = 0.01;
-                let final_ex_ep = 290;
-                if self.ep_numer > final_ex_ep {
-                    self.explore_chance = 0.;
-                } else {
-                    let per_frame_loss = (start_ex - end_ex) / final_ex_ep as f32;
-                    let ex = start_ex - (ep_numer * per_frame_loss);
-                    self.explore_chance = ex;
-                }
-                println!("{}", self.explore_chance);
-            }
-
-            // update learning rate
-            {
-                let start_lr = 0.1;
-                let end_lr = 0.01;
-                let final_lr_ep = 290;
-                if self.ep_numer > final_lr_ep {
-                    self.sgd_lr = 0.;
-                } else {
-                    let per_frame_loss = (start_lr - end_lr) / final_lr_ep as f32;
-                    let ex = start_lr - (ep_numer * per_frame_loss);
-                    self.sgd_lr = ex;
-                }
-                println!("{}", self.sgd_lr);
-            }
+            self.update_variables();
         }
     }
 }

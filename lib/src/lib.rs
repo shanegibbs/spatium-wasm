@@ -147,6 +147,7 @@ impl<T: SpatiumSys> Spatium<T> {
         self.render(&game, None);
         self.last_state = None;
         self.episode += 1;
+        self.step = 0;
 
         let sys = self.sys.read();
         sys.episode_number(self.episode);
@@ -166,7 +167,7 @@ impl<T: SpatiumSys> Spatium<T> {
             (2, 1, Action::Right),
         ];
 
-        if game.step < 40 {
+        if game.step < 40 && false {
             let mut score = 0;
             for (y, x, a) in states {
                 if (y == 1 && x == 1) || (y == 2 && x == 2) {

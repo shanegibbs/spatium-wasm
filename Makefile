@@ -19,6 +19,9 @@ build-watch:
 test:
 	cargo test --all
 
+it_works:
+	cargo test --release -p spatium-lib it_works -- --nocapture
+
 test-pkg:
 	cargo test -p spatium-$(PKG)
 
