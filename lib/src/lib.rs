@@ -1,5 +1,5 @@
 extern crate autograd as ag;
-// #[macro_use(array)]
+#[macro_use(array)]
 extern crate ndarray;
 extern crate ndarray_rand;
 extern crate rand;

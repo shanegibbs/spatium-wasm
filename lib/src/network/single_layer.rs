@@ -54,33 +54,33 @@ impl SingleLayerNetwork {
             experience_buf: vec![],
         }
     }
-    fn run_network(&self, _sys: &SpatiumSys, x_val: ArrayD<f32>) -> (f32, ArrayD<f32>, f32) {
+    // returns a_val [len], q_val [len,4], max_q [len]
+    fn run_network(
+        &self,
+        _sys: &SpatiumSys,
+        x_val: ArrayD<f32>,
+    ) -> (ArrayD<f32>, ArrayD<f32>, ArrayD<f32>) {
+        let len = x_val.shape()[0];
+
         let x = ag::placeholder(&[-1, self.inputs as isize]);
         let w = ag::variable(self.w.clone());
         let b = ag::variable(self.b.clone());
         let z = ag::matmul(&x, &w) + &b;
         let zz = ag::sigmoid(&z);
-        let max = ag::reduce_max(&zz, &[0], false);
+        let max = ag::reduce_max(&zz, &[1], false);
         let a = ag::argmax(&zz, 1, false);
 
         let result = ag::eval(&[&a, &zz, &max], &[(&x, &x_val)]);
 
-        let a_val = result[0].clone().expect("eval a_val")[[0]];
-        let q_val = result[1].clone().expect("eval q_val").clone();
-        let max_q = result[2].clone().expect("eval max_q")[[0]];
+        let a_val = result[0].clone().expect("eval a_val");
+        let q_val = result[1].clone().expect("eval q_val");
+        let max_q = result[2].clone().expect("eval max_q");
 
-        assert!(
-            a_val < 4.,
-            format!("Bad a_val: {:?}. q_val: {}", a_val, q_val)
-        );
-        if q_val.shape() != &[1, 4] {
-            println!("x={}", x_val);
-            println!("w={}", self.w);
-            println!("b={}", self.b);
-            panic!("Wrong q_val shape");
-        }
+        assert_eq!(a_val.shape(), [len]);
+        assert_eq!(q_val.shape(), [len, 4]);
+        assert_eq!(max_q.shape(), [len]);
 
-        (a_val, q_val, max_q)
+        return (a_val, q_val, max_q);
     }
     fn run_update(&mut self, x_val: ArrayD<f32>, y_val: ArrayD<f32>) {
         let inputs_i = self.inputs as isize;
@@ -155,7 +155,8 @@ impl Network for SingleLayerNetwork {
         rng: Option<RcRng>,
         s: &GameState,
     ) -> (Action, f32) {
-        self.last_action = self.run_network(sys, s.into());
+        let result = self.run_network(sys, s.into());
+        self.last_action = (result.0[[0]], result.1.select(Axis(0), &[0]), result.2[[0]]);
 
         // exploring
         if let Some(mut rng) = rng {
@@ -191,6 +192,9 @@ impl Network for SingleLayerNetwork {
             next_state: s1.to_owned(),
             done: done,
         });
+        if self.experience_buf.len() == experience_buf_size - 1 {
+            sys.info("Expierence buffer full");
+        }
         if self.experience_buf.len() > experience_buf_size {
             self.experience_buf.remove(0);
         }
@@ -198,37 +202,46 @@ impl Network for SingleLayerNetwork {
         if self.experience_buf.len() >= experience_buf_size {
             let minibatch_size = 30;
 
-            let mut minibatch: Vec<Experience> = vec![];
-            for _ in 0..minibatch_size {
+            let mut batch_states: Array<f32, Ix2> = Array::zeros((minibatch_size, self.inputs));
+            let mut batch_targets: Array<f32, Ix2> = Array::zeros((minibatch_size, self.outputs));
+
+            for i in 0..minibatch_size {
                 let ex = rng.choose(&self.experience_buf).unwrap().to_owned();
-                minibatch.push(ex);
+
+                let reward = ex.reward as f32 / 10.;
+                let s1: ArrayD<f32> = (&ex.state).into();
+                let s2: ArrayD<f32> = (&ex.next_state).into();
+
+                let mut states: Array<f32, Ix2> = Array::zeros((2, self.inputs));
+                for n in 0..s1.shape()[1] {
+                    states[[0, n]] = s1[[0, n]];
+                    batch_states[[i, n]] = s1[[0, n]];
+                }
+                for n in 0..s2.shape()[1] {
+                    states[[1, n]] = s2[[0, n]];
+                }
+
+                let result = self.run_network(sys, states.into_dyn());
+
+                let q1_val = result.1.select(Axis(0), &[0]);
+                let q2_max = result.2[[1]];
+
+                let mut target_q = q1_val;
+                assert_eq!(target_q.shape(), &[1, 4]);
+
+                let action_i: usize = (&ex.action).into();
+                target_q[[0, action_i]] = reward + (y * q2_max);
+
+                if ex.done {
+                    target_q[[0, action_i]] = reward;
+                }
+
+                for n in 0..target_q.shape()[1] {
+                    batch_targets[[i, n]] = target_q[[0, n]];
+                }
             }
-            let minibatch: Vec<_> = minibatch
-                .into_iter()
-                .map(|ex| {
-                    let reward = ex.reward as f32 / 10.;
-                    let s1: ArrayD<f32> = (&ex.state).into();
-                    let s2: ArrayD<f32> = (&ex.next_state).into();
 
-                    let (_, q_val, _) = self.run_network(sys, s1.clone());
-                    let (_, _, q1_max) = self.run_network(sys, s2);
-                    let mut target_q = q_val;
-                    assert_eq!(target_q.shape(), &[1, 4]);
-
-                    let action_i: usize = (&ex.action).into();
-                    target_q[[0, action_i]] = reward + (y * q1_max);
-
-                    if ex.done {
-                        target_q[[0, action_i]] = reward;
-                    }
-
-                    (s1, target_q)
-                })
-                .collect();
-
-            for (s1, target_q) in minibatch.into_iter() {
-                self.run_update(s1, target_q);
-            }
+            self.run_update(batch_states.into_dyn(), batch_targets.into_dyn());
         }
 
         if done {
