@@ -1,7 +1,4 @@
-use super::Network;
-use game::GameState;
-use action::*;
-use SpatiumSys;
+use super::*;
 
 use std::collections::HashMap;
 
@@ -52,7 +49,7 @@ impl Network for QTable {
         s1: &GameState,
         r: usize,
         _done: bool,
-    ) {
+    ) -> Metrics {
         let mut q_val = self.q
             .get(&s.arr)
             .map(|a| a.to_owned())
@@ -72,6 +69,8 @@ impl Network for QTable {
         let existing = q_val[[action_i]];
         q_val[[action_i]] = existing + lr * (r as f32 + y * r1 - existing);
         self.q.insert(s.arr, q_val);
+
+        Default::default()
     }
 }
 

@@ -22,10 +22,10 @@ pub struct GameState {
     pub arr: Array<u8, Ix2>,
 }
 
-impl<'a> Into<ArrayD<f32>> for &'a GameState {
-    fn into(self) -> ArrayD<f32> {
+impl<'a> Into<Array2<f32>> for &'a GameState {
+    fn into(self) -> Array2<f32> {
         let x = self.arr.iter().map(|n| *n as f32).collect();
-        Array::from_shape_vec(IxDyn(&[1, 9]), x).unwrap()
+        Array::from_shape_vec([1, 9], x).unwrap()
     }
 }
 

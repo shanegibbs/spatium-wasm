@@ -1,8 +1,5 @@
-use super::Network;
-use game::GameState;
-use action::*;
+use super::*;
 use rng::RcRng;
-use SpatiumSys;
 
 use ag;
 use rand::{self, Rng};
@@ -28,7 +25,7 @@ pub struct SingleLayerNetwork {
     outputs: usize,
     w: ArrayD<f32>,
     b: ArrayD<f32>,
-    last_action: (f32, ArrayD<f32>, f32),
+    last_action: (f32, Array1<f32>, f32),
     explore_chance: f32,
     sgd_lr: f32,
     ep_numer: usize,
@@ -47,7 +44,7 @@ impl SingleLayerNetwork {
             outputs,
             w,
             b,
-            last_action: (0., ArrayD::zeros(IxDyn(&[0])), 0.),
+            last_action: (0., Array1::zeros(0), 0.),
             explore_chance: 0.1,
             sgd_lr: 0.1,
             ep_numer: 1,
@@ -58,9 +55,10 @@ impl SingleLayerNetwork {
     fn run_network(
         &self,
         _sys: &SpatiumSys,
-        x_val: ArrayD<f32>,
-    ) -> (ArrayD<f32>, ArrayD<f32>, ArrayD<f32>) {
+        x_val: Array2<f32>,
+    ) -> (Array1<f32>, Array2<f32>, Array1<f32>) {
         let len = x_val.shape()[0];
+        let x_val = x_val.into_dyn();
 
         let x = ag::placeholder(&[-1, self.inputs as isize]);
         let w = ag::variable(self.w.clone());
@@ -77,10 +75,14 @@ impl SingleLayerNetwork {
         let max_q = result[2].clone().expect("eval max_q");
 
         assert_eq!(a_val.shape(), [len]);
-        assert_eq!(q_val.shape(), [len, 4]);
+        assert_eq!(q_val.shape(), [len, self.outputs]);
         assert_eq!(max_q.shape(), [len]);
 
-        return (a_val, q_val, max_q);
+        return (
+            a_val.into_shape(len).expect("a_val shape"),
+            q_val.into_shape((len, self.outputs)).expect("q_val shape"),
+            max_q.into_shape(len).expect("max_q shape"),
+        );
     }
     fn run_update(&mut self, x_val: ArrayD<f32>, y_val: ArrayD<f32>) {
         let inputs_i = self.inputs as isize;
@@ -155,15 +157,21 @@ impl Network for SingleLayerNetwork {
         rng: Option<RcRng>,
         s: &GameState,
     ) -> (Action, f32) {
-        let result = self.run_network(sys, s.into());
-        self.last_action = (result.0[[0]], result.1.select(Axis(0), &[0]), result.2[[0]]);
+        let mut performed = false;
 
         // exploring
         if let Some(mut rng) = rng {
             if rng.next_f32() < self.explore_chance {
                 let dist = rand::distributions::Range::new(0, 3);
                 self.last_action.0 = dist.ind_sample(&mut rng) as f32;
+                performed = true;
             }
+        }
+
+        // greedy if not exporing
+        if !performed {
+            let result = self.run_network(sys, s.into());
+            self.last_action = (result.0[0], result.1.row(0).to_owned(), result.2[0]);
         }
 
         (
@@ -180,11 +188,18 @@ impl Network for SingleLayerNetwork {
         s1: &GameState,
         r: usize,
         done: bool,
-    ) {
-        let experience_buf_size = 300;
-        let y = 0.99;
+    ) -> Metrics {
+        let mut metrics: Metrics = Default::default();
+
+        let experience_buf_size = 100;
+        let minibatch_size = 10;
+        let y = 0.9;
 
         // update expierence buffer
+        if self.experience_buf.len() == experience_buf_size - 1 {
+            sys.info("Expierence buffer full");
+            metrics.annotations.push("Expierence buffer full".into());
+        }
         self.experience_buf.push(Experience {
             state: s.clone(),
             action: *a,
@@ -192,16 +207,11 @@ impl Network for SingleLayerNetwork {
             next_state: s1.to_owned(),
             done: done,
         });
-        if self.experience_buf.len() == experience_buf_size - 1 {
-            sys.info("Expierence buffer full");
-        }
         if self.experience_buf.len() > experience_buf_size {
             self.experience_buf.remove(0);
         }
 
         if self.experience_buf.len() >= experience_buf_size {
-            let minibatch_size = 30;
-
             let mut batch_states: Array<f32, Ix2> = Array::zeros((minibatch_size, self.inputs));
             let mut batch_targets: Array<f32, Ix2> = Array::zeros((minibatch_size, self.outputs));
 
@@ -209,10 +219,10 @@ impl Network for SingleLayerNetwork {
                 let ex = rng.choose(&self.experience_buf).unwrap().to_owned();
 
                 let reward = ex.reward as f32 / 10.;
-                let s1: ArrayD<f32> = (&ex.state).into();
-                let s2: ArrayD<f32> = (&ex.next_state).into();
+                let s1: Array2<f32> = (&ex.state).into();
+                let s2: Array2<f32> = (&ex.next_state).into();
 
-                let mut states: Array<f32, Ix2> = Array::zeros((2, self.inputs));
+                let mut states: Array2<f32> = Array::zeros((2, self.inputs));
                 for n in 0..s1.shape()[1] {
                     states[[0, n]] = s1[[0, n]];
                     batch_states[[i, n]] = s1[[0, n]];
@@ -221,7 +231,7 @@ impl Network for SingleLayerNetwork {
                     states[[1, n]] = s2[[0, n]];
                 }
 
-                let result = self.run_network(sys, states.into_dyn());
+                let result = self.run_network(sys, states);
 
                 let q1_val = result.1.select(Axis(0), &[0]);
                 let q2_max = result.2[[1]];
@@ -248,6 +258,8 @@ impl Network for SingleLayerNetwork {
             self.ep_numer += 1;
             self.update_variables();
         }
+
+        metrics
     }
 }
 

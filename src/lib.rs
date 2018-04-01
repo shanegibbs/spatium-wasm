@@ -40,13 +40,16 @@ fn rng() -> RcRng {
     RcRng::new(Box::new(rng))
 }
 
-fn step() -> String {
+fn step(count: usize) -> String {
     // let mut s = Spatium::new(rng(), SpatiumJsSys::new(), 250);
     // s.step(rng());
     // true
     match DATA.lock().unwrap().as_mut() {
         Some(data) => {
-            let result = data.step(rng());
+            let result: Vec<_> = (0..count).into_iter().map(|_| {
+                data.step(rng())
+            }).collect();
+            // let result = data.step(rng());
             serde_json::to_string(&result).unwrap()
         },
         None => {

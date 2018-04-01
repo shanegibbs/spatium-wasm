@@ -1,6 +1,7 @@
 use game::GameState;
 use action::*;
 use SpatiumSys;
+use Metrics;
 
 use rng::RcRng;
 
@@ -9,5 +10,14 @@ pub mod single_layer;
 
 pub trait Network {
     fn next_action(&mut self, &SpatiumSys, Option<RcRng>, &GameState) -> (Action, f32);
-    fn result(&mut self, &SpatiumSys, RcRng, GameState, &Action, &GameState, usize, bool);
+    fn result(
+        &mut self,
+        &SpatiumSys,
+        RcRng,
+        GameState,
+        &Action,
+        &GameState,
+        usize,
+        bool,
+    ) -> Metrics;
 }

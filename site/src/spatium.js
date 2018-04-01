@@ -1,22 +1,31 @@
 var { DateTime } = require('luxon');
 
-const maxEpisodes = 3000
+const maxEpisodes = 300
 var renderOn = true
 
 const Spatium = {}
 
 function stringFrom(module, cstr) {
-  const bytes = new Uint8Array(module.memory.buffer).slice(cstr)
-  var s = ""
-  for (let n in bytes) {
-    var b = bytes[n]
-    if (b == 0) {
-      break
+  // console.log("Module memory size: " + module.memory.buffer.byteLength / 1024 + " KB")
+  var sArr = []
+  var i = 0
+  var memOffset = cstr
+  const bufferSize = 1024
+
+  for (; ;) {
+    const bytes = new Uint8Array(module.memory.buffer).slice(memOffset, memOffset + bufferSize)
+    memOffset += bufferSize
+
+    for (let n in bytes) {
+      var b = bytes[n]
+      if (b == 0) {
+        module.dealloc(cstr)
+        return sArr.join('')
+      }
+      // using index is faster than push() here
+      sArr[i++] = String.fromCharCode(b)
     }
-    s += String.fromCharCode(b)
   }
-  module.dealloc(cstr)
-  return s
 }
 
 function env(spatium, canvas, frameInfo, logger) {
@@ -229,8 +238,8 @@ Spatium.new = (canvas, frameInfo, logger, readyCallback) => {
     spatium.dealloc = instance.exports.dealloc
 
     spatium.setup = instance.exports.setup
-    spatium.step = () => {
-      return JSON.parse(stringFrom(spatium, instance.exports.step()))
+    spatium.step = (count) => {
+      return JSON.parse(stringFrom(spatium, instance.exports.step(count)))
     }
     spatium.version = instance.exports.version
 
@@ -239,7 +248,7 @@ Spatium.new = (canvas, frameInfo, logger, readyCallback) => {
     const age = date.diffNow(["days", "hours", "minutes"])
     console.log("Version: " + version)
     console.log("Version: " + date.toISO())
-    console.log("Version: " + age.get("hour") + "h " +  Math.round(age.get("minute") * -1) + "m")
+    console.log("Version: " + age.get("hour") + "h " + Math.round(age.get("minute") * -1) + "m")
 
     logger("[system] Loaded spatium module version " + date.toISO())
 

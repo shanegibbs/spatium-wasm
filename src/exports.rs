@@ -29,8 +29,8 @@ pub extern "C" fn setup(max_episodes: usize) {
 }
 
 #[no_mangle]
-pub extern "C" fn step() -> *mut c_char {
-    CString::new(::step()).unwrap().into_raw()
+pub extern "C" fn step(count: usize) -> *mut c_char {
+    CString::new(::step(count)).unwrap().into_raw()
 }
 
 #[no_mangle]

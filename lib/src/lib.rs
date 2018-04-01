@@ -29,7 +29,24 @@ pub struct EpisodeResult {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct Metrics {
+    pub annotations: Vec<String>,
+    pub values: Vec<(String, f32)>,
+}
+
+impl Default for Metrics {
+    fn default() -> Self {
+        Metrics {
+            annotations: vec![],
+            values: vec![],
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StepResult {
+    global_step: usize,
     episode: usize,
     step: usize,
     action: String,
@@ -38,6 +55,7 @@ pub struct StepResult {
     episode_result: Option<EpisodeResult>,
     #[serde(skip_serializing_if = "Option::is_none")]
     rendering_info: Option<RenderingInfo>,
+    metrics: Option<Metrics>,
 }
 
 pub trait SpatiumSys {
@@ -89,12 +107,14 @@ impl<T: SpatiumSys> SpatiumSysHelper<T> {
 
 pub struct Spatium<T: SpatiumSys> {
     sys: SpatiumSysHelper<T>,
+    global_step: usize,
     episode: usize,
     max_episodes: usize,
     step: usize,
     network: Box<Network + Send>,
     game: Option<Game>,
     last_state: Option<(GameState, usize, bool)>,
+    metrics: Option<Metrics>,
 }
 
 impl<T: SpatiumSys> Spatium<T> {
@@ -107,12 +127,14 @@ impl<T: SpatiumSys> Spatium<T> {
         };
         let n = Spatium {
             sys: SpatiumSysHelper::new(sys),
+            global_step: 0,
             step: 0,
             network: network as Box<Network + Send>,
             episode: 0,
             max_episodes: max_episodes,
             game: None,
             last_state: None,
+            metrics: None,
         };
         n.sys.info("Running Spatium");
         n
@@ -226,21 +248,29 @@ impl<T: SpatiumSys> Spatium<T> {
         // render the current game and the decided action
         let (s1, r, done) = self.execute_action(game, &action);
 
-        self.network
+        let metrics = self.network
             .result(&*sys, rng.clone(), s, &action, &s1, r, done);
+        self.metrics = Some(metrics);
     }
     pub fn step(&mut self, rng: RcRng) -> StepResult {
         // render final state
         if self.is_final_state() {
             // returns false on end of final episode
 
+            let episode_result = Some(self.do_final_frame());
+
+            let global_step = self.global_step;
+            self.global_step += 1;
+
             return StepResult {
+                global_step: global_step,
                 episode: self.episode,
                 step: self.step,
                 action: "DIR".into(),
                 done: self.episode >= self.max_episodes,
-                episode_result: Some(self.do_final_frame()),
+                episode_result: episode_result,
                 rendering_info: self.game.as_ref().map(|g| g.rendering_info()),
+                metrics: self.metrics.take(),
             };
         }
 
@@ -256,13 +286,18 @@ impl<T: SpatiumSys> Spatium<T> {
         // process step
         self.process(rng, game, s);
 
+        let global_step = self.global_step;
+        self.global_step += 1;
+
         StepResult {
+            global_step: global_step,
             episode: self.episode,
             step: self.step,
             action: "DIR".into(),
             done: false,
             episode_result: None,
             rendering_info: self.game.as_ref().map(|g| g.rendering_info()),
+            metrics: self.metrics.take(),
         }
     }
 }
