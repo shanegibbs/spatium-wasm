@@ -1,5 +1,5 @@
 extern crate autograd as ag;
-#[macro_use(array)]
+// #[macro_use(array)]
 extern crate ndarray;
 extern crate ndarray_rand;
 extern crate rand;
@@ -18,12 +18,15 @@ pub use rng::RcRng;
 use game::{Game, GameState, RenderingInfo};
 use action::*;
 use network::*;
+pub use network::ModelParameters;
+pub use network::model_descriptions;
 
 use std::sync::{Arc, RwLock, RwLockReadGuard};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EpisodeResult {
+    steps: usize,
     score: f32,
 }
 
@@ -46,28 +49,27 @@ impl Default for Metrics {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StepResult {
-    global_step: usize,
-    episode: usize,
-    step: usize,
-    action: String,
-    done: bool,
+    pub global_step: usize,
+    pub episode: usize,
+    pub step: usize,
+    pub action: String,
+    pub done: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    episode_result: Option<EpisodeResult>,
+    pub episode_result: Option<EpisodeResult>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    rendering_info: Option<RenderingInfo>,
-    metrics: Option<Metrics>,
+    pub rendering_info: Option<RenderingInfo>,
+    pub metrics: Option<Metrics>,
 }
 
 pub trait SpatiumSys {
-    fn info(&self, &str) {}
+    fn debug(&self, &str) {}
+    fn info(&self, s: &str) {
+        println!("{}", s);
+    }
     fn fatal(&self, e: &str) {
         panic!(format!("[fatal] {}", e))
     }
     fn random(&mut self) -> f64;
-    fn clear_screen(&self) {}
-    fn draw_sprite(&self, _i: usize, _x: usize, _y: usize) {}
-    fn frame_info(&self, _info: &str) {}
-    fn episode_number(&self, _i: usize) {}
 }
 
 pub struct SpatiumSysHelper<T: SpatiumSys> {
@@ -97,12 +99,9 @@ impl<T: SpatiumSys> SpatiumSysHelper<T> {
     fn info<S: Into<String>>(&self, s: S) {
         self.sys.read().unwrap().info(s.into().as_ref())
     }
-    // fn draw_sprite(&self, i: usize, x: usize, y: usize) {
-    //     self.sys.read().unwrap().draw_sprite(i, x, y)
-    // }
-    // fn clear_screen(&self) {
-    //     self.sys.read().unwrap().clear_screen()
-    // }
+    fn debug<S: Into<String>>(&self, s: S) {
+        self.sys.read().unwrap().debug(s.into().as_ref())
+    }
 }
 
 pub struct Spatium<T: SpatiumSys> {
@@ -118,18 +117,20 @@ pub struct Spatium<T: SpatiumSys> {
 }
 
 impl<T: SpatiumSys> Spatium<T> {
-    pub fn new(rng: RcRng, sys: T, max_episodes: usize) -> Spatium<T> {
-        let network: Box<Network + Send> = if "" == "qtable" {
-            Box::new(network::qtable::new())
-        } else {
-            // Box::new(network::qtable::new())
-            Box::new(network::single_layer::new(9, 4, rng))
-        };
+    pub fn new<P: IntoModelParameters>(
+        raw_parameters: P,
+        sys: T,
+        rng: RcRng,
+        max_episodes: usize,
+    ) -> Result<Spatium<T>, String> {
+        let model_params = raw_parameters.into_model_parameters()?;
+        sys.info(&format!("Parsed model params: {:?}", model_params));
+        
         let n = Spatium {
             sys: SpatiumSysHelper::new(sys),
             global_step: 0,
             step: 0,
-            network: network as Box<Network + Send>,
+            network: model_params.to_model(rng, 9, 4),
             episode: 0,
             max_episodes: max_episodes,
             game: None,
@@ -137,44 +138,20 @@ impl<T: SpatiumSys> Spatium<T> {
             metrics: None,
         };
         n.sys.info("Running Spatium");
-        n
-    }
-    fn render(&self, game: &Game, action: Option<&Action>) {
-        let sys = self.sys.read();
-
-        sys.clear_screen();
-        for s in &game.blocks {
-            sys.draw_sprite(1, s.x, s.y);
-        }
-        for s in &game.food {
-            sys.draw_sprite(2, s.x, s.y);
-        }
-        sys.draw_sprite(0, game.agent.x, game.agent.y);
-
-        let action_str = action.map(|a| format!("{}", a)).unwrap_or(format!("None"));
-
-        let frame_info = format!(
-            "Episode: {}\nStep: {}\nDone: {}\nAction: {}",
-            self.episode, game.step, game.done, action_str
-        );
-        sys.frame_info(frame_info.as_str());
-
-        sys.episode_number(self.episode);
+        Ok(n)
     }
     fn is_final_state(&self) -> bool {
         self.last_state.as_ref().map(|s| s.2).unwrap_or(false)
     }
     fn do_final_frame(&mut self) -> EpisodeResult {
         let game = self.game.take().unwrap();
-        self.render(&game, None);
         self.last_state = None;
         self.episode += 1;
         self.step = 0;
 
         let sys = self.sys.read();
-        sys.episode_number(self.episode);
 
-        self.sys.info(format!(
+        self.sys.debug(format!(
             "Episode {} complete at step {}",
             self.episode, game.step
         ));
@@ -216,6 +193,7 @@ impl<T: SpatiumSys> Spatium<T> {
         }
 
         EpisodeResult {
+            steps: game.step,
             score: game.step as f32,
         }
     }
@@ -226,9 +204,6 @@ impl<T: SpatiumSys> Spatium<T> {
         self.step += 1;
     }
     fn execute_action(&mut self, mut game: Game, action: &Action) -> (GameState, usize, bool) {
-        // render current state and new action
-        self.render(&game, Some(&action));
-
         // step game using action
         let state = game.step(self.sys.clone(), &action);
 
@@ -322,7 +297,11 @@ mod tests {
     #[test]
     fn it_works() {
         let rng = RcRng::new(Box::new(rand::weak_rng()));
-        let mut spat = Spatium::new(rng.clone(), SpatiumDummy {}, 300);
+        let parameters = ModelParameters::QNetwork(Default::default());
+        let p: String = serde_json::to_string(&parameters).unwrap();
+        println!("Model parameters: {}", p);
+
+        let mut spat = Spatium::new(parameters, SpatiumDummy {}, rng.clone(), 300).unwrap();
         loop {
             let result = spat.step(rng.clone());
             // println!("{}", serde_json::to_string(&result).unwrap());

@@ -8,10 +8,6 @@ use ndarray::prelude::*;
 use rand::distributions::Range;
 use rng::RcRng;
 
-pub fn new() -> QTable {
-    QTable::new()
-}
-
 pub struct QTable {
     q: HashMap<Array<u8, Ix2>, Array<f32, Ix1>>,
 }

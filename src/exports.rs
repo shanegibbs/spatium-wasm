@@ -1,7 +1,10 @@
 use std::mem;
 use std::os::raw::c_void;
 use std::os::raw::*;
-use std::ffi::CString;
+use std::ffi::{CStr, CString};
+
+use serde_json as json;
+use spatium_lib;
 
 #[no_mangle]
 pub extern "C" fn alloc(size: usize) -> *mut c_void {
@@ -24,8 +27,21 @@ pub extern "C" fn version() -> usize {
 }
 
 #[no_mangle]
-pub extern "C" fn setup(max_episodes: usize) {
-    ::setup(max_episodes)
+pub extern "C" fn model_descriptions() -> *mut c_char {
+    let s = json::to_string(&spatium_lib::model_descriptions()).unwrap();
+    CString::new(s).unwrap().into_raw()
+}
+
+#[no_mangle]
+pub extern "C" fn setup(model_params: *mut c_char, max_episodes: usize) -> *mut c_char {
+    let model_params = unsafe { CStr::from_ptr(model_params).to_string_lossy().into_owned() };
+    CString::new(
+        match ::setup(&model_params, max_episodes) {
+            Ok(()) => json!({"result": "ok"}),
+            Err(e) => json!({"result": "error", "message": e}),
+        }.to_string(),
+    ).unwrap()
+        .into_raw()
 }
 
 #[no_mangle]

@@ -1,273 +1,188 @@
 import React from 'react'
-import Plotly from 'plotly.js'
+import Sim from './sim'
+import QNetworkParameters from './qnetworkparameters'
 import Spatium from './spatium'
 
-import Renderer from './renderer'
-
-let SpatiumWorker = require("./spatium.worker.js");
+const qNetwork = "QNetwork"
+const qTable = "QTable"
 
 export default class Welcome extends React.Component {
   constructor(props) {
     super(props)
-    this.clickStep = this.clickStep.bind(this)
-    this.clickStart = this.clickStart.bind(this)
-    this.clickStop = this.clickStop.bind(this)
-    this.handleFpsChange = this.handleFpsChange.bind(this)
-    this.renderLoop = this.renderLoop.bind(this)
+    this.handleGameSelect = this.handleGameSelect.bind(this)
+    this.handleModelSelect = this.handleModelSelect.bind(this)
+    this.handleStartClick = this.handleStartClick.bind(this)
+    this.handleCloseClick = this.handleCloseClick.bind(this)
 
     this.state = {
-      ready: false,
-      running: false,
-      fps: 30,
-      stepIndex: 0,
-      totalSteps: 0
+      loaded: false,
+      game: 1,
+      model: null,
+      parameters: {},
+      modelDescriptions: {},
     }
 
-    this.steps = []
-    this.annotations = []
-  }
-  componentDidMount() {
-
-    this.data = [{
-      x: [],
-      y: [],
-      type: 'scatter',
-      name: 'Episode Score'
-    }]
-    var layout = {
-      title: '',
-      showlegend: true,
-    };
-    Plotly.newPlot(this.refs.graph, this.data, layout, { staticPlot: true })
-
-    this.renderer = new Renderer(this.refs.canvas)
-    this.renderer.clearScreen()
-
-    this.clickStart()
-
-    this.worker = new SpatiumWorker()
-    this.worker.onmessage = event => {
-      const data = JSON.parse(event.data);
-
-      if (data.type == "log") {
-        // term.write(data.message + "\r\n")
-        // console.log(data.message)
-
-      } else if (data.type == "ready") {
-        this.setState((state, p) => {
-          state.ready = true
-          return state
-        })
-
-        this.worker.postMessage({ "type": "start" })
-
-      } else if (data.type == "result") {
-
-        var dataUpdated = false
-        for (var i in data.result) {
-          const step = data.result[i]
-          if (step.hasOwnProperty("episodeResult")) {
-            // console.log(step)
-            this.data[0].x.push(this.data[0].x.length)
-            this.data[0].y.push(step.episodeResult.score)
-            dataUpdated = true
+    Spatium.new((log) => {
+      console.log(log)
+    }, s => {
+      console.log("Loaded")
+      this.setState((state, p) => {
+        const modelDescriptions = s.modelDescriptions()
+        state.modelDescriptions = modelDescriptions
+        
+        // capture first model returned so that we can select
+        // it if nothing is selected yet (state.model)
+        var firstId = null;
+        
+        for (const id in state.modelDescriptions) {
+          if (firstId == null) {
+            firstId = id
+          }          
+          state.parameters[id] = state.modelDescriptions[id].defaultParameters
+          if (state.parameters[id] == null) {
+            state.parameters[id] = {}
           }
-          if (step.hasOwnProperty("metrics") && step.metrics != null) {
-            for (i in step.metrics.annotations) {
-              const annotation = step.metrics.annotations[i]
-              this.annotations.push({
-                episode: step.episode,
-                text: annotation,
-              })
-            }
-          }
-        }
-        if (dataUpdated) {
-          Plotly.restyle(this.refs.graph, '', this.data)
+          state.parameters[id].type = id
         }
 
-        this.steps = this.steps.concat(data.result)
+        if (state.model == null) {
+          state.model = firstId
+        }
 
-      } else {
-        console.log(data)
-      }
-    }
+        state.loaded = true
+
+        return state
+      })
+    })
+
   }
-  clickStep() {
-    this.worker.postMessage({ "type": "step" })
-  }
-  clickStop() {
-    this.worker.postMessage({ "type": "stop" })
+  handleGameSelect(e) {
+    const target = e.target
     this.setState((state, p) => {
-      state.running = false
+      state.game = parseInt(target.value)
       return state
     })
   }
-  clickStart() {
-    this.state.running = true
+  handleModelSelect(e) {
+    const target = e.target
     this.setState((state, p) => {
-      state.running = true
+      state.model = target.value
       return state
     })
-    this.renderLoop()
   }
-  renderLoop() {
-    if (!this.state.running) {
-      return
-    }
-
-    let actualFps = 0;
-
-    let prevTimestamp = null;
-    const gameLoopStep = (timestamp) => {
-      if (!this.state.running) {
-        return
-      }
-
-      if (!prevTimestamp) {
-        prevTimestamp = timestamp
-      }
-
-      const fps = this.state.fps
-      const targetDelta = 1000 / fps
-
-      let delta = timestamp - prevTimestamp;
-
-      // not time for next frame yet
-      if (delta <= targetDelta) {
-        requestAnimationFrame(gameLoopStep)
-        return
-      }
-
-      // new stepIndex
-      const stepIndex = Math.min(this.state.stepIndex + 1, this.steps.length - 1)
-
-      const step = this.steps[stepIndex]
-      if (typeof step != 'undefined') {
-        const renderingInfo = step.renderingInfo
-
-        this.setState(state => {
-          state.stepIndex = stepIndex
-          state.step = step
-          return state
-        })
-
-        if (typeof renderingInfo != 'undefined') {
-          this.renderer.render(renderingInfo)
-        }
-
-        var annotations = []
-        for (var i in this.annotations) {
-          const ann = this.annotations[i]
-          annotations.push({
-            x: ann.episode,
-            y: 0,
-            text: ann.text,
-          })
-        }
-
-        const update = {
-          annotations: annotations,
-          shapes: [
-            {
-              type: 'line',
-              x0: step.episode,
-              y0: 0,
-              x1: step.episode,
-              y1: 40,
-              line: {
-                color: 'rgb(255, 0, 0)',
-              }
-            }
-          ]
-        }
-        Plotly.relayout(this.refs.graph, update)
-
-      }
-
-      // schedule again if still running
-      if (this.state.running) {
-        prevTimestamp = timestamp
-        actualFps = Math.round(1000 / delta, 2)
-        // console.log("fps " + actualFps)
-        requestAnimationFrame(gameLoopStep)
-      } else {
-        console.log("Game loop ended")
-      }
-    }
-
-    gameLoopStep()
-  }
-  handleFpsChange(e) {
-    const newValue = e.target.value
+  handleStartClick() {
     this.setState((state, p) => {
-      state.fps = newValue
+      state.selected = {
+        game: state.game,
+        model: state.model,
+      }
       return state
     })
+  }
+  handleCloseClick() {
+    this.setState((state, p) => {
+      state.selected = null
+      return state
+    })
+  }
+  isRunning() {
+    return this.state.selected != null
   }
   render() {
-    var stepHtml = ""
-    const step = this.steps[this.state.stepIndex]
-    if (typeof step != 'undefined') {
-      stepHtml = <pre className="frame-info">
-        Episode: {step.episode}<br />
-        Step: {step.step}<br />
-        Action: {step.action}<br />
-      </pre>
+    var gameDescription = <div className="col"><p>None</p></div>
+    if (this.state.game == 1) {
+      gameDescription = <div className="col"><p>Simple game on a 3x3 grid.</p></div>
     }
 
-    var controlPanel = "Loading module..."
-    if (this.state.ready) {
-      controlPanel = <div>
-        <div className="panel panel-default">
-          <div className="panel-body">
-            <div className="btn-group" role="group">
-              <button className="btn btn-success" disabled={!this.state.ready || this.state.running} onClick={this.clickStart}>Start</button>
-              <button className="btn btn-warning" disabled={!this.state.ready || this.state.running} onClick={this.clickStep}>Step</button>
-              <button className="btn btn-danger" disabled={!this.state.ready || !this.state.running} onClick={this.clickStop}>Stop</button>
-            </div>
-          </div>
-        </div>
-        <br />
-        <div className="form-group">
-          <input type="text" className="form-control" placeholder="FPS" value={this.state.fps} onChange={this.handleFpsChange} />
-          <small id="fpsHelp" className="form-text text-muted">Frames per second. 0 for max.</small>
-        </div>
-        {stepHtml}
-        <pre>
-          Rendering: {this.state.stepIndex} / {this.steps.length}<br />
-        </pre>
-      </div>
+    var modelParameters = <p>No parameters</p>
+    {
+      const model = this.state.model
+      var parameters = this.state.parameters[model]
+      const update = (parameters) => {
+        this.setState((state, p) => {
+          state.parameters[model] = parameters
+          // console.log(state)
+          return state
+        })
+      }
+      if (model == qNetwork) {
+        modelParameters = <QNetworkParameters parameters={parameters} onChange={update} />
+      }
+    }
+
+    const gameOptions = <div className="col">
+      <h3>Game Options</h3>
+      <select className="custom-select" defaultValue={this.state.game} onChange={this.handleGameSelect}>
+        <option value="1">Game 1</option>
+      </select>
+      {gameDescription}
+    </div>
+
+    var modelSelectOptions = []
+    // console.log()
+    for (const i in this.state.modelDescriptions) {
+      const modelDescription = this.state.modelDescriptions[i]
+      const id = modelDescription.id
+      const name = modelDescription.name
+      modelSelectOptions.push(<option key={id} value={id}>{name}</option>)
+    }
+
+    const modelOptions = <div className="col">
+      <h3>Model</h3>
+      <select className="custom-select" defaultValue={this.state.model} onChange={this.handleModelSelect}>
+        {modelSelectOptions}
+      </select>
+      <br />
+      <br />
+      <h4>Parameters</h4>
+      {modelParameters}
+    </div>
+
+    const startButton = <div className="col text-right">
+      <button className="btn btn-primary" onClick={this.handleStartClick}>Start</button>
+    </div>
+
+    const stopButton = <div className="col text-right">
+      <button className="btn btn-danger" onClick={this.handleCloseClick}>Back</button>
+    </div>
+
+    var game = gameOptions
+    var model = modelOptions
+    var button = startButton
+    var sim = <div />
+
+    if (this.isRunning()) {
+      game = ''
+      model = ''
+      button = stopButton
+      sim = <Sim modelParameters={this.state.parameters[this.state.model]} />
     }
 
     const terms = <div>
-      <h2>Terms</h2>
+      <h4>Terms</h4>
       <ul>
         <li><strong>Step</strong> - A single turn of the game</li>
         <li><strong>Episode</strong> - A complete playthrough of the game</li>
       </ul>
     </div>
 
-    return (
-      <div>
-        <div className="row">
-
-          <div className="col">
-            <canvas ref="canvas" className="canvas"></canvas>
-            {terms}
-          </div>
-
-          <div className="col">
-            {controlPanel}
-          </div>
-        </div>
-
-        <div className="row">
-          <div className="col">
-            <div ref="graph"></div>
-          </div>
-        </div>
+    var page = <div>
+      <div className="row">
+        {game}
+        {model}
+        {button}
       </div>
-    );
+      {sim}
+      <hr />
+      <div>
+        {terms}
+      </div>
+    </div>
+
+    if (this.state.loaded) {
+      return page
+    }
+
+    return <div></div>
   }
 }

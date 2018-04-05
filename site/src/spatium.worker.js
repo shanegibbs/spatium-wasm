@@ -7,16 +7,16 @@ var targetFps = 0;
 
 console.log("Started worker")
 
-Spatium.new(0, 0, (log) => {
-  postMessage(JSON.stringify({ "type": "log", "message": log }));
+Spatium.new((log) => {
+  postMessage(JSON.stringify({ type: "log", "message": log }));
 }, s => {
   spatium = s
-  postMessage(JSON.stringify({ "type": "ready" }));
+  postMessage(JSON.stringify({ type: "loaded" }));
 })
 
 function step(count) {
   const result = spatium.step(count);
-  postMessage(JSON.stringify({ "type": "result", "result": result }));
+  postMessage(JSON.stringify({ type: "result", result: result }));
   for (var i in result) {
     if (result[i].done) {
       running = false
@@ -42,7 +42,18 @@ onmessage = function (e) {
   // console.log(e.data)
   // console.log("Received message")
 
-  if (e.data.type == "start") {
+  if (e.data.type == "parameters") {
+    const model_params = JSON.stringify(e.data.model)
+    const steupResult = JSON.parse(spatium.setup(model_params, 300))
+    console.log("Setup:")
+    console.log(steupResult)
+    if (steupResult.result != "ok") {
+      postMessage(JSON.stringify({ type: "error", message: "Setup failed. " + steupResult.message }));
+      return
+    }
+
+    postMessage(JSON.stringify({ type: "ready" }));
+  } else if (e.data.type == "start") {
     targetFps = e.data.fps
     start()
   } else if (e.data.type == "stop") {

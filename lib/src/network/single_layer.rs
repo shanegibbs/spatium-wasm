@@ -7,10 +7,6 @@ use ndarray::prelude::*;
 use ag::gradient_descent_ops::Optimizer;
 use rand::distributions::IndependentSample;
 
-pub fn new(inputs: usize, outputs: usize, rng: RcRng) -> SingleLayerNetwork {
-    SingleLayerNetwork::new(inputs, outputs, rng)
-}
-
 #[derive(Clone)]
 struct Experience {
     state: GameState,
@@ -21,6 +17,7 @@ struct Experience {
 }
 
 pub struct SingleLayerNetwork {
+    parameters: SingleLayerNetworkParameters,
     inputs: usize,
     outputs: usize,
     w: ArrayD<f32>,
@@ -32,14 +29,58 @@ pub struct SingleLayerNetwork {
     experience_buf: Vec<Experience>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DynamicValue {
+    pub initial_rate: f32,
+    pub final_rate: f32,
+    pub final_episode: usize,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SingleLayerNetworkParameters {
+    pub minibatch_size: usize,
+    pub expierence_buffer_size: usize,
+    pub discount_factor: f32,
+    pub learning: DynamicValue,
+    pub exploration: DynamicValue,
+}
+
+impl Default for SingleLayerNetworkParameters {
+    fn default() -> Self {
+        SingleLayerNetworkParameters {
+            minibatch_size: 10,
+            expierence_buffer_size: 100,
+            discount_factor: 0.99,
+            learning: DynamicValue {
+                initial_rate: 0.1,
+                final_rate: 0.01,
+                final_episode: 290,
+            },
+            exploration: DynamicValue {
+                initial_rate: 1.0,
+                final_rate: 0.01,
+                final_episode: 290,
+            },
+        }
+    }
+}
+
 impl SingleLayerNetwork {
-    pub fn new(inputs: usize, outputs: usize, rng: RcRng) -> Self {
+    pub fn new(
+        parameters: SingleLayerNetworkParameters,
+        inputs: usize,
+        outputs: usize,
+        rng: RcRng,
+    ) -> Self {
         let arr_rng = ag::ndarray_ext::ArrRng::new(rng.clone());
 
         let w = arr_rng.glorot_uniform(&[inputs, outputs]);
         let b = ag::ndarray_ext::zeros(&[1, outputs]);
 
         SingleLayerNetwork {
+            parameters,
             inputs,
             outputs,
             w,
@@ -145,6 +186,7 @@ impl SingleLayerNetwork {
                 let ex = start_lr - (ep_numer * per_frame_loss);
                 self.sgd_lr = ex;
             }
+            self.sgd_lr = 0.1;
             // println!("lr: {}", self.sgd_lr);
         }
     }
@@ -191,9 +233,9 @@ impl Network for SingleLayerNetwork {
     ) -> Metrics {
         let mut metrics: Metrics = Default::default();
 
-        let experience_buf_size = 100;
-        let minibatch_size = 10;
-        let y = 0.9;
+        let experience_buf_size = self.parameters.expierence_buffer_size;
+        let minibatch_size = self.parameters.minibatch_size;
+        let y = self.parameters.discount_factor;
 
         // update expierence buffer
         if self.experience_buf.len() == experience_buf_size - 1 {
@@ -273,7 +315,7 @@ mod test {
     fn test_main() {
         let dummy = SpatiumDummy {};
         let rng = RcRng::new(Box::new(weak_rng()));
-        let mut net = SingleLayerNetwork::new(9, 4, rng.clone());
+        let mut net = SingleLayerNetwork::new(Default::default(), 9, 4, rng.clone());
 
         let mut state: Array<u8, Ix2> = Array::zeros((3, 3));
         state[[1, 1]] = 1;

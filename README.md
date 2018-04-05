@@ -26,6 +26,11 @@ An Introduction](http://ufal.mff.cuni.cz/~straka/courses/npfl114/2016/sutton-boo
 * https://mattmazur.com/2015/03/17/a-step-by-step-backpropagation-example/
 * https://becominghuman.ai/back-propagation-is-very-simple-who-made-it-complicated-97b794c97e5c
 
+#### Evolution Strategies
+
+* https://blog.openai.com/evolution-strategies/
+* https://arxiv.org/pdf/1703.03864.pdf
+
 #### Rust
 
 * [Same code is slow in Rust, but is fast in C using clang 3.9](https://github.com/rust-lang/rust/issues/39446)
