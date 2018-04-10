@@ -308,7 +308,7 @@ impl Network for SingleLayerNetwork {
 #[cfg(test)]
 mod test {
     use super::*;
-    use tests::SpatiumDummy;
+    use spatium::tests::SpatiumDummy;
     use rand::weak_rng;
 
     #[test]
