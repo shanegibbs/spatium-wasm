@@ -50,7 +50,7 @@ pub struct RenderingInfo {
 
 impl Game {
     pub fn new(max_steps: usize) -> (Game, GameState, usize, bool) {
-        let mut n = Game {
+        let n = Game {
             step: 0,
             max_steps: max_steps,
             width: 3,
@@ -61,9 +61,10 @@ impl Game {
             blocks: vec![sprite(1, 1)],
             food: vec![sprite(2, 2)],
         };
-        let state = n.update_state();
-        n.step = 0;
-        (n, state.0, state.1, state.2)
+        let state = n.build_state();
+        let reward = n.reward;
+        let done = n.done;
+        (n, state, reward, done)
     }
     pub fn rendering_info(&self) -> RenderingInfo {
         RenderingInfo {
@@ -101,12 +102,14 @@ impl Game {
     }
     pub fn step<T: SpatiumSys>(
         &mut self,
-        _helper: SpatiumSysHelper<T>,
+        sys: SpatiumSysHelper<T>,
         action: &Action,
     ) -> (GameState, usize, bool) {
         if self.done {
             panic!("Game already done");
         }
+
+        sys.debug(format!("Game step {} to {}", self.step, self.step + 1));
 
         let mut new_x = self.agent.x;
         let mut new_y = self.agent.y;

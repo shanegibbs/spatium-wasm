@@ -61,6 +61,35 @@ pub struct StepResult {
     pub metrics: Option<Metrics>,
 }
 
+impl StepResult {
+    fn new(
+        episode: usize,
+        step: usize,
+        action: String,
+        done: bool,
+        rendering_info: RenderingInfo,
+    ) -> Self {
+        StepResult {
+            global_step: 0,
+            episode: episode,
+            step: step,
+            action: action,
+            done: done,
+            episode_result: None,
+            rendering_info: Some(rendering_info),
+            metrics: None,
+        }
+    }
+    fn with_metrics(mut self, metrics: Metrics) -> Self {
+        self.metrics = Some(metrics);
+        self
+    }
+    fn with_episode_result(mut self, episode_result: EpisodeResult) -> Self {
+        self.episode_result = Some(episode_result);
+        self
+    }
+}
+
 pub trait SpatiumSys {
     fn debug(&self, &str) {}
     fn info(&self, s: &str) {
@@ -104,16 +133,23 @@ impl<T: SpatiumSys> SpatiumSysHelper<T> {
     }
 }
 
+struct RunningArgs {
+    episode: usize,
+    step: usize,
+    game: Game,
+    game_state: GameState,
+}
+
+enum EpisodeState {
+    Init { episode: usize },
+    Running(RunningArgs),
+}
+
 pub struct Spatium<T: SpatiumSys> {
     sys: SpatiumSysHelper<T>,
-    global_step: usize,
-    episode: usize,
     max_episodes: usize,
-    step: usize,
     network: Box<Network + Send>,
-    game: Option<Game>,
-    last_state: Option<(GameState, usize, bool)>,
-    metrics: Option<Metrics>,
+    episode_state: Option<EpisodeState>,
 }
 
 impl<T: SpatiumSys> Spatium<T> {
@@ -125,155 +161,112 @@ impl<T: SpatiumSys> Spatium<T> {
     ) -> Result<Spatium<T>, String> {
         let model_params = raw_parameters.into_model_parameters()?;
         sys.info(&format!("Parsed model params: {:?}", model_params));
-        
+
         let n = Spatium {
             sys: SpatiumSysHelper::new(sys),
-            global_step: 0,
-            step: 0,
             network: model_params.to_model(rng, 9, 4),
-            episode: 0,
+            episode_state: None,
             max_episodes: max_episodes,
-            game: None,
-            last_state: None,
-            metrics: None,
         };
         n.sys.info("Running Spatium");
         Ok(n)
     }
-    fn is_final_state(&self) -> bool {
-        self.last_state.as_ref().map(|s| s.2).unwrap_or(false)
+    fn process_inital_state(&self, episode: usize) -> (EpisodeState, StepResult) {
+        let (game, game_state, _score, _done) = Game::new(30);
+        let rendering_info = game.rendering_info();
+        (
+            EpisodeState::Running(RunningArgs {
+                episode: episode,
+                step: 1,
+                game: game,
+                game_state: game_state,
+            }),
+            StepResult::new(episode, 0, "DIR".into(), false, rendering_info),
+        )
     }
-    fn do_final_frame(&mut self) -> EpisodeResult {
-        let game = self.game.take().unwrap();
-        self.last_state = None;
-        self.episode += 1;
-        self.step = 0;
-
-        let sys = self.sys.read();
-
-        self.sys.debug(format!(
-            "Episode {} complete at step {}",
-            self.episode, game.step
-        ));
-
-        let states = vec![
-            (0, 0, Action::Right),
-            (0, 1, Action::Right),
-            (1, 0, Action::Down),
-            (0, 2, Action::Down),
-            (2, 0, Action::Right),
-            (1, 2, Action::Down),
-            (2, 1, Action::Right),
-        ];
-
-        if game.step < 40 && false {
-            let mut score = 0;
-            for (y, x, a) in states {
-                if (y == 1 && x == 1) || (y == 2 && x == 2) {
-                    continue;
-                }
-                let mut s = GameState {
-                    arr: ndarray::Array::zeros((3, 3)),
-                };
-                s.arr[[y, x]] = 1;
-                let (action, val) = self.network.next_action(&*sys, None, &s);
-                let mut good = action == a;
-                if y == 0 && x == 0 && action == Action::Down {
-                    good = true;
-                }
-                if good {
-                    score += 1;
-                }
-                println!(
-                    "({},{}) = {:?} ({:?}), {} - val={}",
-                    y, x, action, a, good, val
-                );
-            }
-            println!("Score: {}", score);
-        }
-
-        EpisodeResult {
-            steps: game.step,
-            score: game.step as f32,
-        }
-    }
-    fn reset_game(&mut self) {
-        let (game, s, r, done) = Game::new(40);
-        self.game = Some(game);
-        self.last_state = Some((s, r, done));
-        self.step += 1;
-    }
-    fn execute_action(&mut self, mut game: Game, action: &Action) -> (GameState, usize, bool) {
-        // step game using action
-        let state = game.step(self.sys.clone(), &action);
-
-        // prepare for next step
-        self.game = Some(game);
-        self.last_state = Some(state.clone());
-        self.step += 1;
-
-        state
-    }
-    // do AI stuff and call self.execute_action
-    fn process(&mut self, rng: RcRng, game: Game, s: GameState) {
+    fn process_running_state(
+        &mut self,
+        rng: RcRng,
+        args: RunningArgs,
+    ) -> (EpisodeState, StepResult) {
         let sys = self.sys.clone();
         let sys = sys.read();
-        let (action, _val) = self.network.next_action(&*sys, Some(rng.clone()), &s);
 
-        // render the current game and the decided action
-        let (s1, r, done) = self.execute_action(game, &action);
+        let RunningArgs {
+            episode,
+            step,
+            mut game,
+            game_state,
+        } = args;
 
-        let metrics = self.network
-            .result(&*sys, rng.clone(), s, &action, &s1, r, done);
-        self.metrics = Some(metrics);
+        // get next action from model
+        let (action, _val) = self.network
+            .next_action(&*sys, Some(rng.clone()), &game_state);
+
+        // advance game using action
+        let (game_state1, score1, done) = game.step(self.sys.clone(), &action);
+
+        // pass result to model and collect any metrics
+        let metrics = self.network.result(
+            &*sys,
+            rng.clone(),
+            game_state,
+            &action,
+            &game_state1,
+            score1,
+            done,
+        );
+
+        let result = StepResult::new(
+            episode,
+            step,
+            "DIR".into(),
+            episode > self.max_episodes,
+            game.rendering_info(),
+        ).with_metrics(metrics);
+
+        if done {
+            self.sys
+                .debug(format!("Episode {} complete at step {}", episode, step));
+            (
+                EpisodeState::Init {
+                    episode: episode + 1,
+                },
+                result.with_episode_result(EpisodeResult {
+                    steps: step,
+                    score: step as f32,
+                }),
+            )
+        } else {
+            (
+                EpisodeState::Running(RunningArgs {
+                    episode: episode,
+                    step: step + 1,
+                    game: game,
+                    game_state: game_state1,
+                }),
+                result,
+            )
+        }
     }
     pub fn step(&mut self, rng: RcRng) -> StepResult {
-        // render final state
-        if self.is_final_state() {
-            // returns false on end of final episode
-
-            let episode_result = Some(self.do_final_frame());
-
-            let global_step = self.global_step;
-            self.global_step += 1;
-
-            return StepResult {
-                global_step: global_step,
-                episode: self.episode,
-                step: self.step,
-                action: "DIR".into(),
-                done: self.episode >= self.max_episodes,
-                episode_result: episode_result,
-                rendering_info: self.game.as_ref().map(|g| g.rendering_info()),
-                metrics: self.metrics.take(),
-            };
-        }
-
-        // setup new game
-        if self.last_state.is_none() {
-            self.reset_game();
-        }
-
-        // extract current state
-        let game = self.game.take().unwrap();
-        let (s, _last_r, _) = self.last_state.take().unwrap();
-
-        // process step
-        self.process(rng, game, s);
-
-        let global_step = self.global_step;
-        self.global_step += 1;
-
-        StepResult {
-            global_step: global_step,
-            episode: self.episode,
-            step: self.step,
-            action: "DIR".into(),
-            done: false,
-            episode_result: None,
-            rendering_info: self.game.as_ref().map(|g| g.rendering_info()),
-            metrics: self.metrics.take(),
-        }
+        let episode_state = self.episode_state.take();
+        let (new_state, result) = match episode_state {
+            None => {
+                println!("No EpisodeState");
+                self.process_inital_state(0)
+            }
+            Some(EpisodeState::Init { episode }) => {
+                println!("EpisodeState::Init");
+                self.process_inital_state(episode)
+            }
+            Some(EpisodeState::Running(args)) => {
+                println!("EpisodeState::Running");
+                self.process_running_state(rng, args)
+            }
+        };
+        self.episode_state = Some(new_state);
+        result
     }
 }
 
@@ -286,6 +279,9 @@ mod tests {
     pub struct SpatiumDummy;
 
     impl SpatiumSys for SpatiumDummy {
+        fn debug(&self, s: &str) {
+            println!("debug: {}", s);
+        }
         fn info(&self, s: &str) {
             println!("info: {}", s);
         }
@@ -301,13 +297,13 @@ mod tests {
         let p: String = serde_json::to_string(&parameters).unwrap();
         println!("Model parameters: {}", p);
 
-        let mut spat = Spatium::new(parameters, SpatiumDummy {}, rng.clone(), 300).unwrap();
+        let mut spat = Spatium::new(parameters, SpatiumDummy {}, rng.clone(), 2).unwrap();
         loop {
             let result = spat.step(rng.clone());
-            // println!("{}", serde_json::to_string(&result).unwrap());
-            if let Some(ref _ep_result) = result.episode_result {
-                println!("{}", serde_json::to_string(&result).unwrap());
-            }
+            println!("{}", serde_json::to_string(&result).unwrap());
+            // if let Some(ref _ep_result) = result.episode_result {
+            //     println!("{}", serde_json::to_string(&result).unwrap());
+            // }
             if result.done {
                 break;
             }

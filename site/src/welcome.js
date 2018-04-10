@@ -29,15 +29,15 @@ export default class Welcome extends React.Component {
       this.setState((state, p) => {
         const modelDescriptions = s.modelDescriptions()
         state.modelDescriptions = modelDescriptions
-        
+
         // capture first model returned so that we can select
         // it if nothing is selected yet (state.model)
-        var firstId = null;
-        
+        let firstId = null;
+
         for (const id in state.modelDescriptions) {
           if (firstId == null) {
             firstId = id
-          }          
+          }
           state.parameters[id] = state.modelDescriptions[id].defaultParameters
           if (state.parameters[id] == null) {
             state.parameters[id] = {}
@@ -89,15 +89,15 @@ export default class Welcome extends React.Component {
     return this.state.selected != null
   }
   render() {
-    var gameDescription = <div className="col"><p>None</p></div>
+    let gameDescription = <div className="col"><p>None</p></div>
     if (this.state.game == 1) {
       gameDescription = <div className="col"><p>Simple game on a 3x3 grid.</p></div>
     }
 
-    var modelParameters = <p>No parameters</p>
+    let modelParameters = <p>No parameters</p>
     {
       const model = this.state.model
-      var parameters = this.state.parameters[model]
+      let parameters = this.state.parameters[model]
       const update = (parameters) => {
         this.setState((state, p) => {
           state.parameters[model] = parameters
@@ -118,8 +118,7 @@ export default class Welcome extends React.Component {
       {gameDescription}
     </div>
 
-    var modelSelectOptions = []
-    // console.log()
+    let modelSelectOptions = []
     for (const i in this.state.modelDescriptions) {
       const modelDescription = this.state.modelDescriptions[i]
       const id = modelDescription.id
@@ -146,10 +145,10 @@ export default class Welcome extends React.Component {
       <button className="btn btn-danger" onClick={this.handleCloseClick}>Back</button>
     </div>
 
-    var game = gameOptions
-    var model = modelOptions
-    var button = startButton
-    var sim = <div />
+    let game = gameOptions
+    let model = modelOptions
+    let button = startButton
+    let sim = <div />
 
     if (this.isRunning()) {
       game = ''
@@ -166,7 +165,7 @@ export default class Welcome extends React.Component {
       </ul>
     </div>
 
-    var page = <div>
+    let page = <div>
       <div className="row">
         {game}
         {model}

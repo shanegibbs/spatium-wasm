@@ -1,15 +1,15 @@
-var { DateTime } = require('luxon');
+const { DateTime } = require('luxon');
 
 const maxEpisodes = 300
-var renderOn = true
+let renderOn = true
 
 const Spatium = {}
 
 function stringFrom(module, cstr) {
   // console.log("Module memory size: " + module.memory.buffer.byteLength / 1024 + " KB")
-  var sArr = []
-  var i = 0
-  var memOffset = cstr
+  let sArr = []
+  let i = 0
+  let memOffset = cstr
   const bufferSize = 1024
 
   for (; ;) {
@@ -17,7 +17,7 @@ function stringFrom(module, cstr) {
     memOffset += bufferSize
 
     for (let n in bytes) {
-      var b = bytes[n]
+      let b = bytes[n]
       if (b == 0) {
         module.dealloc(cstr)
         return sArr.join('')
@@ -131,7 +131,7 @@ function newString(module, str) {
   let ptr = module.alloc(len + 1)
 
   let memory = new Uint8Array(module.memory.buffer); // TODO: this is probably very slow
-  for (var i = 0; i < len; i++) {
+  for (let i = 0; i < len; i++) {
     memory[ptr + i] = string_buffer[i]
   }
 

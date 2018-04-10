@@ -18,7 +18,7 @@ export default class Sim extends React.Component {
     this.state = {
       ready: false,
       running: false,
-      fps: 30,
+      fps: 5,
       stepIndex: 0,
       totalSteps: 0
     }
@@ -34,7 +34,7 @@ export default class Sim extends React.Component {
       type: 'scatter',
       name: 'Episode Score'
     }]
-    var layout = {
+    let layout = {
       title: '',
       showlegend: true,
     };
@@ -83,8 +83,8 @@ export default class Sim extends React.Component {
 
       } else if (data.type == "result") {
 
-        var dataUpdated = false
-        for (var i in data.result) {
+        let dataUpdated = false
+        for (let i in data.result) {
           const step = data.result[i]
           if (step.hasOwnProperty("episodeResult")) {
             // console.log(step)
@@ -168,6 +168,7 @@ export default class Sim extends React.Component {
 
       const step = this.steps[stepIndex]
       if (typeof step != 'undefined') {
+        // console.log(step)
         const renderingInfo = step.renderingInfo
 
         this.setState(state => {
@@ -180,8 +181,8 @@ export default class Sim extends React.Component {
           this.renderer.render(renderingInfo)
         }
 
-        var annotations = []
-        for (var i in this.annotations) {
+        let annotations = []
+        for (let i in this.annotations) {
           const ann = this.annotations[i]
           annotations.push({
             x: ann.episode,
@@ -230,7 +231,7 @@ export default class Sim extends React.Component {
     })
   }
   render() {
-    var stepHtml = ""
+    let stepHtml = ""
     const step = this.steps[this.state.stepIndex]
     if (typeof step != 'undefined') {
       stepHtml = <pre className="frame-info">
@@ -240,7 +241,7 @@ export default class Sim extends React.Component {
       </pre>
     }
 
-    var controlPanel = "Loading module..."
+    let controlPanel = "Loading module..."
     if (this.state.ready) {
       controlPanel = <div>
         <div className="form-group">

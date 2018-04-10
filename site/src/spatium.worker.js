@@ -16,6 +16,7 @@ Spatium.new((log) => {
 
 function step(count) {
   const result = spatium.step(count);
+  console.log(result)
   postMessage(JSON.stringify({ type: "result", result: result }));
   for (var i in result) {
     if (result[i].done) {

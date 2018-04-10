@@ -29,7 +29,8 @@ An Introduction](http://ufal.mff.cuni.cz/~straka/courses/npfl114/2016/sutton-boo
 #### Evolution Strategies
 
 * https://blog.openai.com/evolution-strategies/
-* https://arxiv.org/pdf/1703.03864.pdf
+* [Evolution Strategies as a Scalable Alternative to Reinforcement Learning](https://arxiv.org/abs/1703.03864) https://arxiv.org/pdf/1703.03864.pdf
+* https://gist.github.com/shanegibbs/4c80cd759b564789bfcdf7bc2d20f966
 
 #### Rust
 
