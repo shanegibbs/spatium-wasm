@@ -9,7 +9,9 @@ use Metrics;
 use rng::RcRng;
 
 mod qtable;
-mod single_layer;
+pub mod single_layer;
+
+pub use self::single_layer::{DynamicValue, SingleLayerNetworkParameters};
 
 pub trait Network {
     fn next_action(&mut self, &SpatiumSys, Option<RcRng>, &GameState) -> (Action, f32);
@@ -63,29 +65,28 @@ pub enum ModelParameters {
 }
 
 pub trait IntoModelParameters {
-    fn into_model_parameters(self) -> Result<ModelParameters, String>;
+    fn into_parameters(self) -> Result<ModelParameters, String>;
 }
 
 impl IntoModelParameters for ModelParameters {
-    fn into_model_parameters(self) -> Result<ModelParameters, String> {
+    fn into_parameters(self) -> Result<ModelParameters, String> {
         Ok(self)
     }
 }
 
 impl<'a> IntoModelParameters for &'a str {
-    fn into_model_parameters(self) -> Result<ModelParameters, String> {
+    fn into_parameters(self) -> Result<ModelParameters, String> {
         json::from_str(self).map_err(|e| format!("{}. String was:\n{}", e, self))
     }
 }
 
 impl ModelParameters {
-    pub fn to_model(self, rng: RcRng, inputs: usize, outputs: usize) -> Box<Network + Send> {
+    pub fn to_model(self, rng: RcRng, ios: (usize, usize)) -> Box<Network + Send> {
         match self {
             ModelParameters::QTable => Box::new(qtable::QTable::new()),
             ModelParameters::QNetwork(p) => Box::new(single_layer::SingleLayerNetwork::new(
                 p,
-                inputs,
-                outputs,
+                ios,
                 rng,
             )),
         }

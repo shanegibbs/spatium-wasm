@@ -18,7 +18,7 @@ export default class Sim extends React.Component {
     this.state = {
       ready: false,
       running: false,
-      fps: 5,
+      fps: 10,
       stepIndex: 0,
       totalSteps: 0
     }
@@ -50,7 +50,7 @@ export default class Sim extends React.Component {
       if (!this.state.running) {
         return
       }
-  
+
       const data = JSON.parse(event.data);
 
       if (data.type == "log") {
@@ -164,12 +164,17 @@ export default class Sim extends React.Component {
       }
 
       // new stepIndex
-      const stepIndex = Math.min(this.state.stepIndex + 1, this.steps.length - 1)
+      let stepIndex = Math.min(this.state.stepIndex + 1, this.steps.length - 1)
 
       const step = this.steps[stepIndex]
       if (typeof step != 'undefined') {
         // console.log(step)
         const renderingInfo = step.renderingInfo
+
+        const idealMin = parseInt((this.steps.length / 6) * 5)
+        if (stepIndex < idealMin) {
+          stepIndex = idealMin
+        }
 
         this.setState(state => {
           state.stepIndex = stepIndex

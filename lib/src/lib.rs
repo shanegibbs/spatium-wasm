@@ -8,6 +8,9 @@ extern crate serde;
 extern crate serde_derive;
 extern crate serde_json;
 
+#[cfg(test)]
+extern crate rayon;
+
 mod action;
 mod game;
 mod network;
@@ -17,9 +20,10 @@ mod spatium;
 pub use spatium::Spatium;
 pub use rng::RcRng;
 
-use game::{Game, GameState, RenderingInfo};
+use game::*;
 use action::*;
 use network::*;
+pub use game::GameParameters;
 pub use network::ModelParameters;
 pub use network::model_descriptions;
 
@@ -118,6 +122,18 @@ where
     }
 }
 
+impl <T: SpatiumSys> SpatiumSys for SpatiumSysHelper<T> {
+    fn info(&self, s: &str) {
+        self.sys.read().unwrap().info(s)
+    }
+    fn debug(&self, s: &str) {
+        self.sys.read().unwrap().debug(s)
+    }
+    fn random(&mut self) -> f64 {
+        self.sys.write().unwrap().random()
+    }
+}
+
 impl<T: SpatiumSys> SpatiumSysHelper<T> {
     fn new(t: T) -> SpatiumSysHelper<T> {
         SpatiumSysHelper {
@@ -127,22 +143,4 @@ impl<T: SpatiumSys> SpatiumSysHelper<T> {
     fn read(&self) -> RwLockReadGuard<T> {
         self.sys.read().unwrap()
     }
-    fn info<S: Into<String>>(&self, s: S) {
-        self.sys.read().unwrap().info(s.into().as_ref())
-    }
-    fn debug<S: Into<String>>(&self, s: S) {
-        self.sys.read().unwrap().debug(s.into().as_ref())
-    }
-}
-
-struct RunningArgs {
-    episode: usize,
-    step: usize,
-    game: Game,
-    game_state: GameState,
-}
-
-enum EpisodeState {
-    Init { episode: usize },
-    Running(RunningArgs),
 }

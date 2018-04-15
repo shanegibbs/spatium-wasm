@@ -70,10 +70,11 @@ impl Default for SingleLayerNetworkParameters {
 impl SingleLayerNetwork {
     pub fn new(
         parameters: SingleLayerNetworkParameters,
-        inputs: usize,
-        outputs: usize,
+        ios: (usize, usize),
         rng: RcRng,
     ) -> Self {
+        let inputs = ios.0;
+        let outputs = ios.1;
         let arr_rng = ag::ndarray_ext::ArrRng::new(rng.clone());
 
         let w = arr_rng.glorot_uniform(&[inputs, outputs]);
@@ -315,9 +316,9 @@ mod test {
     fn test_main() {
         let dummy = SpatiumDummy {};
         let rng = RcRng::new(Box::new(weak_rng()));
-        let mut net = SingleLayerNetwork::new(Default::default(), 9, 4, rng.clone());
+        let mut net = SingleLayerNetwork::new(Default::default(), (9, 4), rng.clone());
 
-        let mut state: Array<u8, Ix2> = Array::zeros((3, 3));
+        let mut state: ArrayD<u8> = Array::zeros(IxDyn(&[3, 3]));
         state[[1, 1]] = 1;
         let state = GameState { arr: state };
 

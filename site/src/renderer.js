@@ -2,30 +2,45 @@ const gridHeight = 3
 const gridWidth = 3
 const gridOffsetX = 20
 const gridOffsetY = 20
-const gridStepHeight = 60
-const gridStepWidth = 60
 
 class Renderer {
     constructor(canvas) {
         const ctx = canvas.getContext("2d")
 
-        canvas.width = (gridStepWidth * gridWidth) + (gridOffsetX * 2)
+        canvas.width = 240
         canvas.style.width = canvas.width + "px"
-        canvas.height = (gridStepHeight * gridHeight) + (gridOffsetY * 2)
+        canvas.height = 240
         canvas.style.height = canvas.height + "px"
 
         // Draw crisp lines
         // http://www.mobtowers.com/html5-canvas-crisp-lines-every-time/
-        ctx.translate(0.5, 0.5)
+        // ctx.translate(0.5, 0.5)
 
         this.canvas = canvas
         this.ctx = ctx
     }
+    GridStepHeight() {
+        return (this.canvas.height - (gridOffsetX * 2)) / this.renderingInfo.height
+    }
+    GridStepWidth() {
+        return (this.canvas.width - (gridOffsetY * 2)) / this.renderingInfo.width
+    }
     render(renderingInfo) {
+        this.renderingInfo = renderingInfo
         this.clearScreen()
-        this.drawSprite(1, 1, 1)
-        this.drawSprite(2, 2, 2)
-        this.drawSprite(0, renderingInfo.x, renderingInfo.y)
+        for (const layer of renderingInfo.layers) {
+            let id = 0
+            if (layer.name == "agent") {
+                id = 0
+            } else if (layer.name == "block") {
+                id = 1
+            } else if (layer.name == "food") {
+                id = 2
+            }
+            for (const point of layer.points) {
+                this.drawSprite(id, point.x, point.y)
+            }
+        }
     }
     clearScreen() {
         const canvas = this.canvas
@@ -34,6 +49,15 @@ class Renderer {
         // clear
         ctx.fillStyle = "white"
         ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+        if (typeof(this.renderingInfo) == 'undefined') {
+            return
+        }
+
+        const gridHeight = this.renderingInfo.height
+        const gridWidth = this.renderingInfo.width
+        const gridStepHeight = this.GridStepHeight()
+        const gridStepWidth = this.GridStepWidth()
 
         // draw grid
         ctx.beginPath()
@@ -66,6 +90,9 @@ class Renderer {
         } else if (i == 2) {
             ctx.fillStyle = "green"
         }
+
+        let gridStepHeight = this.GridStepHeight()
+        let gridStepWidth = this.GridStepWidth()
 
         ctx.fillRect(
             gridOffsetX + gridStepWidth * x,

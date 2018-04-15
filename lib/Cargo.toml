@@ -12,3 +12,6 @@ autograd = { git = "https://github.com/raskr/rust-autograd" }
 serde = "*"
 serde_json = "*"
 serde_derive = "*"
+
+[dev-dependencies]
+rayon = "1.0"

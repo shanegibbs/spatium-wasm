@@ -3,13 +3,13 @@ use super::*;
 use std::collections::HashMap;
 
 use ndarray_rand::RandomExt;
-use ndarray::{Array, Ix1, Ix2};
+use ndarray::{Array, Ix1};
 use ndarray::prelude::*;
 use rand::distributions::Range;
 use rng::RcRng;
 
 pub struct QTable {
-    q: HashMap<Array<u8, Ix2>, Array<f32, Ix1>>,
+    q: HashMap<ArrayD<u8>, Array<f32, Ix1>>,
 }
 
 impl QTable {

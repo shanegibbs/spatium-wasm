@@ -14,7 +14,7 @@ mod spatium_js_sys;
 use std::sync::Mutex;
 use rand::SeedableRng;
 
-use spatium_lib::{RcRng, Spatium, SpatiumSys};
+use spatium_lib::*;
 use spatium_js_sys::SpatiumJsSys;
 
 type SpatiumJs = Mutex<Option<Spatium<SpatiumJsSys>>>;
@@ -38,6 +38,7 @@ fn rng() -> RcRng {
 fn setup(model_params: &str, max_episodes: usize) -> Result<(), String> {
     let mut data = DATA.lock().unwrap();
     *data = Some(Spatium::new(
+        GameParameters::Game1(Default::default()),
         model_params,
         SpatiumJsSys::new(),
         rng(),

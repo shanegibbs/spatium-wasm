@@ -16,7 +16,7 @@ Spatium.new((log) => {
 
 function step(count) {
   const result = spatium.step(count);
-  console.log(result)
+  // console.log(result)
   postMessage(JSON.stringify({ type: "result", result: result }));
   for (var i in result) {
     if (result[i].done) {
@@ -45,7 +45,7 @@ onmessage = function (e) {
 
   if (e.data.type == "parameters") {
     const model_params = JSON.stringify(e.data.model)
-    const steupResult = JSON.parse(spatium.setup(model_params, 300))
+    const steupResult = JSON.parse(spatium.setup(model_params, 10000))
     console.log("Setup:")
     console.log(steupResult)
     if (steupResult.result != "ok") {

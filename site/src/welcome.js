@@ -111,7 +111,7 @@ export default class Welcome extends React.Component {
     }
 
     const gameOptions = <div className="col">
-      <h3>Game Options</h3>
+      <h3>Game</h3>
       <select className="custom-select" defaultValue={this.state.game} onChange={this.handleGameSelect}>
         <option value="1">Game 1</option>
       </select>
