@@ -1,7 +1,7 @@
+use super::*;
+use action::*;
 use ndarray::prelude::*;
 use SpatiumSys;
-use action::*;
-use super::*;
 
 pub struct Sprite {
     pub x: usize,
@@ -28,9 +28,9 @@ pub struct Game1Parameters {
 
 impl Default for Game1Parameters {
     fn default() -> Self {
-        let size = 10;
+        let size = 4;
         Game1Parameters {
-            max_steps: size * 4,
+            max_steps: 50,
             size: size,
             random: true,
         }
@@ -39,6 +39,7 @@ impl Default for Game1Parameters {
 
 pub struct Game1 {
     params: Game1Parameters,
+    level: usize,
     state: State,
 }
 
@@ -56,7 +57,7 @@ struct State {
 }
 
 impl State {
-    fn new(p: &Game1Parameters, rng: &mut RcRng) -> Self {
+    fn new(p: &Game1Parameters, level: usize, rng: &mut RcRng) -> Self {
         let mut state = State {
             max_steps: p.max_steps,
             width: p.size,
@@ -70,8 +71,12 @@ impl State {
             done: false,
         };
 
+        if p.random {
+            state.agent = state.random_empty_space(rng, level);
+        }
+
         let food = if p.random {
-            state.random_empty_space(rng)
+            state.random_empty_space(rng, level)
         } else {
             sprite(state.width - 1, state.height - 1)
         };
@@ -92,10 +97,11 @@ impl State {
         }
         true
     }
-    fn random_empty_space(&self, rng: &mut RcRng) -> Sprite {
+    fn random_empty_space(&self, rng: &mut RcRng, level: usize) -> Sprite {
+        let level = level + 1;
         use rand::distributions::{IndependentSample, Range};
-        let width_range = Range::new(0, self.width);
-        let height_range = Range::new(0, self.height);
+        let width_range = Range::new(0, level.min(self.width));
+        let height_range = Range::new(0, level.min(self.height));
 
         loop {
             let sprite = Sprite {
@@ -151,7 +157,7 @@ impl State {
             panic!("Game already done");
         }
 
-        sys.debug(&format!("Game step {} to {}", self.step, self.step + 1));
+        // sys.debug(&format!("Game step {} to {}", self.step, self.step + 1));
 
         let mut new_x = self.agent.x;
         let mut new_y = self.agent.y;
@@ -204,12 +210,13 @@ impl State {
 
 impl Game1 {
     pub fn new(p: Game1Parameters, mut rng: RcRng) -> Box<Game + Send> {
-        let state = State::new(&p, &mut rng);
-        let n = Self {
+        let state = State::new(&p, 1, &mut rng);
+        let game = Self {
             params: p,
+            level: 1,
             state: state,
         };
-        Box::new(n)
+        Box::new(game)
     }
 }
 
@@ -222,31 +229,17 @@ impl Game for Game1 {
         (self.state.width * self.state.height * layers, 4)
     }
     fn reset(&mut self, mut rng: RcRng) -> (GameState, usize, bool) {
-        self.state = State::new(&self.params, &mut rng);
-        // self.step = 0;
-        // self.done = false;
-        // self.reward = 0;
-        // self.agent = sprite(0, 0);
-        // self.blocks = vec![sprite(1, 1)];
-
-        // if self.random_food {
-        //     self.food = vec![self.random_empty_space(&mut rng)];
-        // } else {
-        //     self.food = vec![sprite(self.width - 1, self.height - 1)];
-        // }
-
+        self.state = State::new(&self.params, self.level, &mut rng);
         self.state.update_state()
     }
 
     fn rendering_info(&self) -> RenderingInfo {
         let agent_layer = RenderingLayer {
             name: "agent".into(),
-            points: vec![
-                Point {
-                    x: self.state.agent.x,
-                    y: self.state.agent.y,
-                },
-            ],
+            points: vec![Point {
+                x: self.state.agent.x,
+                y: self.state.agent.y,
+            }],
         };
         let block_layer = RenderingLayer {
             name: "block".into(),
@@ -273,6 +266,48 @@ impl Game for Game1 {
     }
 
     fn step(&mut self, sys: &SpatiumSys, action: &Action) -> (GameState, usize, bool) {
-        self.state.step(sys, action)
+        let result = self.state.step(sys, action);
+
+        if result.2 {
+            if result.1 > 0 {
+                self.level += 1;
+            } else {
+                if self.level > 3 {
+                    self.level -= 1;
+                }
+            }
+        }
+
+        result
+    }
+
+    fn eval(&self, sys: &SpatiumSys, model: &Box<Network + Send>) {
+        fn test_state(
+            p: &Game1Parameters,
+            agent: (usize, usize),
+            food: (usize, usize),
+        ) -> GameState {
+            State {
+                max_steps: 10,
+                width: p.size,
+                height: p.size,
+                random: true,
+                step: 0,
+                agent: sprite(agent.0, agent.1),
+                blocks: vec![sprite(1, 1)],
+                food: vec![sprite(food.0, food.1)],
+                reward: 0,
+                done: false,
+            }.build_state()
+        }
+
+        let result: Vec<_> = [(1, 0), (2, 0), (2, 1)]
+            .iter()
+            .map(|case| {
+                let game_state = test_state(&self.params, *case, (2, 2));
+                model.test(sys, &game_state)
+            })
+            .collect();
+        println!("{:?}", result);
     }
 }

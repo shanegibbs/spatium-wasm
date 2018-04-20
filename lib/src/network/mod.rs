@@ -14,6 +14,9 @@ pub mod single_layer;
 pub use self::single_layer::{DynamicValue, SingleLayerNetworkParameters};
 
 pub trait Network {
+    fn test(&self, &SpatiumSys, &GameState) -> (Action, f32) {
+        (Action::Down, 0.)
+    }
     fn next_action(&mut self, &SpatiumSys, Option<RcRng>, &GameState) -> (Action, f32);
     fn result(
         &mut self,
@@ -38,7 +41,7 @@ pub fn model_descriptions() -> Models {
             id: "QNetwork".into(),
             name: "Q-Network".into(),
             default_parameters: Default::default(),
-        }
+        },
     }
 }
 
@@ -84,11 +87,9 @@ impl ModelParameters {
     pub fn to_model(self, rng: RcRng, ios: (usize, usize)) -> Box<Network + Send> {
         match self {
             ModelParameters::QTable => Box::new(qtable::QTable::new()),
-            ModelParameters::QNetwork(p) => Box::new(single_layer::SingleLayerNetwork::new(
-                p,
-                ios,
-                rng,
-            )),
+            ModelParameters::QNetwork(p) => {
+                Box::new(single_layer::SingleLayerNetwork::new(p, ios, rng))
+            }
         }
     }
 }

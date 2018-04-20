@@ -18,10 +18,13 @@ struct Experience {
 
 pub struct SingleLayerNetwork {
     parameters: SingleLayerNetworkParameters,
+    step: usize,
     inputs: usize,
     outputs: usize,
     w: ArrayD<f32>,
     b: ArrayD<f32>,
+    target_w: ArrayD<f32>,
+    target_b: ArrayD<f32>,
     last_action: (f32, Array1<f32>, f32),
     explore_chance: f32,
     sgd_lr: f32,
@@ -51,28 +54,24 @@ impl Default for SingleLayerNetworkParameters {
     fn default() -> Self {
         SingleLayerNetworkParameters {
             minibatch_size: 10,
-            expierence_buffer_size: 100,
+            expierence_buffer_size: 1000,
             discount_factor: 0.99,
             learning: DynamicValue {
                 initial_rate: 0.1,
                 final_rate: 0.01,
-                final_episode: 290,
+                final_episode: 1000,
             },
             exploration: DynamicValue {
                 initial_rate: 1.0,
-                final_rate: 0.01,
-                final_episode: 290,
+                final_rate: 0.1,
+                final_episode: 1000,
             },
         }
     }
 }
 
 impl SingleLayerNetwork {
-    pub fn new(
-        parameters: SingleLayerNetworkParameters,
-        ios: (usize, usize),
-        rng: RcRng,
-    ) -> Self {
+    pub fn new(parameters: SingleLayerNetworkParameters, ios: (usize, usize), rng: RcRng) -> Self {
         let inputs = ios.0;
         let outputs = ios.1;
         let arr_rng = ag::ndarray_ext::ArrRng::new(rng.clone());
@@ -82,12 +81,15 @@ impl SingleLayerNetwork {
 
         SingleLayerNetwork {
             parameters,
+            step: 0,
             inputs,
             outputs,
-            w,
-            b,
+            w: w.clone(),
+            b: b.clone(),
+            target_w: w,
+            target_b: b,
             last_action: (0., Array1::zeros(0), 0.),
-            explore_chance: 0.1,
+            explore_chance: 1.0,
             sgd_lr: 0.1,
             ep_numer: 1,
             experience_buf: vec![],
@@ -105,6 +107,39 @@ impl SingleLayerNetwork {
         let x = ag::placeholder(&[-1, self.inputs as isize]);
         let w = ag::variable(self.w.clone());
         let b = ag::variable(self.b.clone());
+        let z = ag::matmul(&x, &w) + &b;
+        let zz = ag::sigmoid(&z);
+        let max = ag::reduce_max(&zz, &[1], false);
+        let a = ag::argmax(&zz, 1, false);
+
+        let result = ag::eval(&[&a, &zz, &max], &[(&x, &x_val)]);
+
+        let a_val = result[0].clone().expect("eval a_val");
+        let q_val = result[1].clone().expect("eval q_val");
+        let max_q = result[2].clone().expect("eval max_q");
+
+        assert_eq!(a_val.shape(), [len]);
+        assert_eq!(q_val.shape(), [len, self.outputs]);
+        assert_eq!(max_q.shape(), [len]);
+
+        return (
+            a_val.into_shape(len).expect("a_val shape"),
+            q_val.into_shape((len, self.outputs)).expect("q_val shape"),
+            max_q.into_shape(len).expect("max_q shape"),
+        );
+    }
+    // returns a_val [len], q_val [len,4], max_q [len]
+    fn run_target_network(
+        &self,
+        _sys: &SpatiumSys,
+        x_val: Array2<f32>,
+    ) -> (Array1<f32>, Array2<f32>, Array1<f32>) {
+        let len = x_val.shape()[0];
+        let x_val = x_val.into_dyn();
+
+        let x = ag::placeholder(&[-1, self.inputs as isize]);
+        let w = ag::variable(self.target_w.clone());
+        let b = ag::variable(self.target_b.clone());
         let z = ag::matmul(&x, &w) + &b;
         let zz = ag::sigmoid(&z);
         let max = ag::reduce_max(&zz, &[1], false);
@@ -162,9 +197,9 @@ impl SingleLayerNetwork {
 
         // update explore chance
         {
-            let start_ex = 1.;
-            let end_ex = 0.1;
-            let final_ex_ep = 290;
+            let start_ex = self.parameters.exploration.initial_rate;
+            let end_ex = self.parameters.exploration.final_rate;
+            let final_ex_ep = self.parameters.exploration.final_episode;
             if self.ep_numer > final_ex_ep {
                 self.explore_chance = end_ex;
             } else {
@@ -177,9 +212,9 @@ impl SingleLayerNetwork {
 
         // update learning rate
         {
-            let start_lr = 0.1;
-            let end_lr = 0.01;
-            let final_lr_ep = 290;
+            let start_lr = self.parameters.learning.initial_rate;
+            let end_lr = self.parameters.learning.final_rate;
+            let final_lr_ep = self.parameters.learning.final_episode;
             if self.ep_numer > final_lr_ep {
                 self.sgd_lr = end_lr;
             } else {
@@ -187,13 +222,20 @@ impl SingleLayerNetwork {
                 let ex = start_lr - (ep_numer * per_frame_loss);
                 self.sgd_lr = ex;
             }
-            self.sgd_lr = 0.1;
             // println!("lr: {}", self.sgd_lr);
         }
     }
 }
 
 impl Network for SingleLayerNetwork {
+    fn test(&self, sys: &SpatiumSys, game_state: &GameState) -> (Action, f32) {
+        let result = self.run_network(sys, game_state.into());
+        (
+            (result.0[0] as usize).into(),
+            result.2[0] * 10.,
+        )
+    }
+
     fn next_action(
         &mut self,
         sys: &SpatiumSys,
@@ -274,7 +316,7 @@ impl Network for SingleLayerNetwork {
                     states[[1, n]] = s2[[0, n]];
                 }
 
-                let result = self.run_network(sys, states);
+                let result = self.run_target_network(sys, states);
 
                 let q1_val = result.1.select(Axis(0), &[0]);
                 let q2_max = result.2[[1]];
@@ -297,10 +339,17 @@ impl Network for SingleLayerNetwork {
             self.run_update(batch_states.into_dyn(), batch_targets.into_dyn());
         }
 
+        if self.step % 300 == 0 {
+            self.target_w = self.w.clone();
+            self.target_b = self.b.clone();
+        }
+
         if done {
             self.ep_numer += 1;
             self.update_variables();
         }
+
+        self.step += 1;
 
         metrics
     }

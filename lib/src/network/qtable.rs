@@ -2,9 +2,9 @@ use super::*;
 
 use std::collections::HashMap;
 
-use ndarray_rand::RandomExt;
-use ndarray::{Array, Ix1};
 use ndarray::prelude::*;
+use ndarray::{Array, Ix1};
+use ndarray_rand::RandomExt;
 use rand::distributions::Range;
 use rng::RcRng;
 
@@ -19,6 +19,15 @@ impl QTable {
 }
 
 impl Network for QTable {
+    fn test(&self, _sys: &SpatiumSys, game_state: &GameState) -> (Action, f32) {
+        let q_val = self.q
+            .get(&game_state.arr)
+            .map(|a| a.to_owned())
+            .unwrap_or(Array::zeros(4));
+        let (action_i, maxq) = argmax(&q_val);
+        (action_i.into(), maxq)
+    }
+
     fn next_action(&mut self, _: &SpatiumSys, rng: Option<RcRng>, s: &GameState) -> (Action, f32) {
         let q_val = self.q
             .get(&s.arr)

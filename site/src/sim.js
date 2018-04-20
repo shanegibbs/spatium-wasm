@@ -39,6 +39,7 @@ export default class Sim extends React.Component {
       showlegend: true,
     };
     Plotly.newPlot(this.refs.graph, this.data, layout, { staticPlot: true })
+    this.raw_data = []
 
     this.renderer = new Renderer(this.refs.canvas)
     this.renderer.clearScreen()
@@ -88,8 +89,9 @@ export default class Sim extends React.Component {
           const step = data.result[i]
           if (step.hasOwnProperty("episodeResult")) {
             // console.log(step)
-            this.data[0].x.push(this.data[0].x.length)
-            this.data[0].y.push(step.episodeResult.score)
+            // this.data[0].x.push(this.data[0].x.length)
+            // this.data[0].y.push(step.episodeResult.score)
+            this.raw_data.push(step.episodeResult.score)
             dataUpdated = true
           }
           if (step.hasOwnProperty("metrics") && step.metrics != null) {
@@ -102,7 +104,29 @@ export default class Sim extends React.Component {
             }
           }
         }
+
         if (dataUpdated) {
+          const maxPoints = 100
+          const stepSize = this.raw_data.length / maxPoints
+          this.stepSize = stepSize
+          let data_x = []
+          let data_y = []
+          for (let i = 0; i < maxPoints; i++) {
+            const offset = parseInt(i * stepSize)
+
+            data_x.push(i)
+
+            let valueCount = 0
+            let value = 0
+            for (let n = offset; n < offset + stepSize; n++) {
+              value += this.raw_data[n]
+              valueCount++
+            }
+            data_y.push(value / valueCount)
+
+          }
+          this.data[0].x = data_x
+          this.data[0].y = data_y
           Plotly.restyle(this.refs.graph, '', this.data)
         }
 
@@ -171,9 +195,11 @@ export default class Sim extends React.Component {
         // console.log(step)
         const renderingInfo = step.renderingInfo
 
-        const idealMin = parseInt((this.steps.length / 6) * 5)
-        if (stepIndex < idealMin) {
-          stepIndex = idealMin
+        if (step.hasOwnProperty("episodeResult")) {
+          const idealMin = parseInt((this.steps.length / 6) * 5)
+          if (stepIndex < idealMin) {
+            stepIndex = idealMin
+          }
         }
 
         this.setState(state => {
@@ -197,14 +223,14 @@ export default class Sim extends React.Component {
         }
 
         const update = {
-          annotations: annotations,
+          annotations: [],
           shapes: [
             {
               type: 'line',
-              x0: step.episode,
+              x0: step.episode / this.stepSize,
               y0: 0,
-              x1: step.episode,
-              y1: 40,
+              x1: step.episode / this.stepSize,
+              y1: 10,
               line: {
                 color: 'rgb(255, 0, 0)',
               }

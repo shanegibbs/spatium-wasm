@@ -46,6 +46,9 @@ impl<T: SpatiumSys> Spatium<T> {
         n.sys.info("Running Spatium");
         Ok(n)
     }
+    pub fn eval(&self) {
+        self.game.eval(&self.sys, &self.network);
+    }
     fn process_inital_state(&mut self, rng: RcRng, episode: usize) -> (EpisodeState, StepResult) {
         let (game_state, _score, _done) = self.game.reset(rng);
 
@@ -108,7 +111,7 @@ impl<T: SpatiumSys> Spatium<T> {
                 },
                 result.with_episode_result(EpisodeResult {
                     steps: step,
-                    score: step as f32,
+                    score: score1 as f32,
                 }),
             )
         } else {
@@ -163,16 +166,16 @@ pub mod tests {
         let rng = RcRng::new(Box::new(rand::weak_rng()));
         let game = GameParameters::Game1(Default::default());
         let model = ModelParameters::QNetwork(Default::default());
-        let mut spat = Spatium::new(game, model, SpatiumDummy {}, rng.clone(), 1000).unwrap();
+        let mut spat = Spatium::new(game, model, SpatiumDummy {}, rng.clone(), 10000).unwrap();
         loop {
             let result = spat.step(rng.clone());
             // println!("{}", serde_json::to_string(&result).unwrap());
             if let Some(ref ep_result) = result.episode_result {
                 println!("{}", serde_json::to_string(&ep_result).unwrap());
             }
-            // if result.done {
-            //     break;
-            // }
+            if result.done {
+                break;
+            }
         }
     }
 
@@ -184,9 +187,9 @@ pub mod tests {
         // let expierence_buffer_sizes = [10, 100];
         // let max_steps = [30];
 
-        let minibatch_sizes = [1, 10, 100];
-        let expierence_buffer_sizes = [10, 100];
-        let max_steps = [10, 20, 30, 40];
+        let minibatch_sizes = [1, 10, 1000];
+        let expierence_buffer_sizes = [10000];
+        let max_steps = [50];
 
         let mut choices = vec![];
         for a in minibatch_sizes.iter() {
@@ -200,64 +203,65 @@ pub mod tests {
         use std::cell::RefCell;
 
         let mut results: Vec<_> = choices
-            .into_par_iter()
+            .iter()
             .map(|choice| {
-                let rng = RcRng::new(Box::new(rand::weak_rng()));
-
                 println!("{:?}", choice);
-                let minibatch_size = choice.0;
-                let expierence_buffer_size = choice.1;
-                let max_steps = choice.2;
+                let all_scores: Vec<_> = (0..7)
+                    .into_par_iter()
+                    .map(|i| {
+                        let rng = RcRng::new(Box::new(rand::weak_rng()));
+                        let minibatch_size = choice.0;
+                        let expierence_buffer_size = choice.1;
+                        let max_steps = choice.2;
 
-                let model = ModelParameters::QNetwork(SingleLayerNetworkParameters {
-                    minibatch_size: minibatch_size,
-                    expierence_buffer_size: expierence_buffer_size,
-                    discount_factor: 0.99,
-                    learning: DynamicValue {
-                        initial_rate: 0.1,
-                        final_rate: 0.01,
-                        final_episode: 900,
-                    },
-                    exploration: DynamicValue {
-                        initial_rate: 1.0,
-                        final_rate: 0.01,
-                        final_episode: 900,
-                    },
-                });
-                // println!(
-                //     "Model parameters: {}",
-                //     serde_json::to_string(&model).unwrap()
-                // );
+                        let model = ModelParameters::QNetwork(SingleLayerNetworkParameters {
+                            minibatch_size: minibatch_size,
+                            expierence_buffer_size: expierence_buffer_size,
+                            discount_factor: 0.99,
+                            learning: DynamicValue {
+                                initial_rate: 0.1,
+                                final_rate: 0.01,
+                                final_episode: 8000,
+                            },
+                            exploration: DynamicValue {
+                                initial_rate: 1.0,
+                                final_rate: 0.01,
+                                final_episode: 8000,
+                            },
+                        });
+                        // println!(
+                        //     "Model parameters: {}",
+                        //     serde_json::to_string(&model).unwrap()
+                        // );
 
-                let game = GameParameters::Game1(Game1Parameters {
-                    max_steps: max_steps,
-                    size: 4,
-                    random: true,
-                });
-                // println!("Game parameters: {}", serde_json::to_string(&game).unwrap());
+                        let game = GameParameters::Game1(Game1Parameters {
+                            max_steps: max_steps,
+                            size: 10,
+                            random: true,
+                        });
+                        // println!("Game parameters: {}", serde_json::to_string(&game).unwrap());
 
-                let mut spat =
-                    Spatium::new(game, model, SpatiumDummy {}, rng.clone(), 1000).unwrap();
+                        let mut spat =
+                            Spatium::new(game, model, SpatiumDummy {}, rng.clone(), 1000).unwrap();
 
-                let mut all_scores = vec![];
-                for _ in 0..6 {
-                    let mut scores = vec![];
-                    loop {
-                        let result = spat.step(rng.clone());
-                        // println!("{}", serde_json::to_string(&result).unwrap());
-                        if let Some(ref ep_result) = result.episode_result {
-                            // println!("{}", serde_json::to_string(&ep_result).unwrap());
-                            scores.push(ep_result.score);
-                            if scores.len() > 30 {
-                                scores.remove(0);
+                        let mut scores = vec![];
+                        loop {
+                            let result = spat.step(rng.clone());
+                            // println!("{}", serde_json::to_string(&result).unwrap());
+                            if let Some(ref ep_result) = result.episode_result {
+                                // println!("{}", serde_json::to_string(&ep_result).unwrap());
+                                scores.push(ep_result.score);
+                                if scores.len() > 30 {
+                                    scores.remove(0);
+                                }
+                            }
+                            if result.done {
+                                break;
                             }
                         }
-                        if result.done {
-                            break;
-                        }
-                    }
-                    all_scores.extend(scores);
-                }
+                        scores.iter().fold(0., |a, n| a + n) / scores.len() as f32
+                    })
+                    .collect();
 
                 let score = all_scores.iter().fold(0., |a, n| a + n) / all_scores.len() as f32;
                 println!("score={}", score);

@@ -6,6 +6,7 @@ use RcRng;
 mod game1;
 
 use super::SpatiumSys;
+use Network;
 pub use self::game1::Game1Parameters;
 use action::Action;
 
@@ -14,6 +15,7 @@ pub trait Game {
     fn reset(&mut self, rng: RcRng) -> (GameState, usize, bool);
     fn step(&mut self, sys: &SpatiumSys, action: &Action) -> (GameState, usize, bool);
     fn rendering_info(&self) -> RenderingInfo;
+    fn eval(&self, &SpatiumSys, &Box<Network + Send>);
 }
 
 #[derive(Clone, Debug)]

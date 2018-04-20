@@ -23,17 +23,22 @@ pub use rng::RcRng;
 use game::*;
 use action::*;
 use network::*;
+
 pub use game::GameParameters;
+pub use game::Game1Parameters;
+
 pub use network::ModelParameters;
 pub use network::model_descriptions;
+pub use network::SingleLayerNetworkParameters;
+pub use network::DynamicValue;
 
 use std::sync::{Arc, RwLock, RwLockReadGuard};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EpisodeResult {
-    steps: usize,
-    score: f32,
+    pub steps: usize,
+    pub score: f32,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

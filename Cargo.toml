@@ -9,6 +9,11 @@ build = "build.rs"
 [lib]
 crate-type = ["cdylib"]
 
+[profile.release]
+debug = false
+lto = true
+opt-level = 's'
+
 [dependencies]
 spatium-lib = { path = "lib" }
 lazy_static = "1.0.0"

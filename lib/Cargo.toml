@@ -8,6 +8,7 @@ ndarray = "0.10.0"
 ndarray-rand = "0.6.1"
 rand = "*"
 # autograd = { path = "../../rust-autograd" }
+# autograd = { git = "https://github.com/raskr/rust-autograd", features = ["blas"] }
 autograd = { git = "https://github.com/raskr/rust-autograd" }
 serde = "*"
 serde_json = "*"

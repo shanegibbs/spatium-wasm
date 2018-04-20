@@ -50,7 +50,7 @@ class Renderer {
         ctx.fillStyle = "white"
         ctx.fillRect(0, 0, canvas.width, canvas.height)
 
-        if (typeof(this.renderingInfo) == 'undefined') {
+        if (typeof (this.renderingInfo) == 'undefined') {
             return
         }
 
@@ -69,19 +69,23 @@ class Renderer {
         ctx.strokeStyle = "black"
         ctx.lineWidth = 1
 
-        for (let x = 1; x < gridWidth; x++) {
-            ctx.moveTo(gridOffsetX + (gridStepWidth * x), gridOffsetY)
-            ctx.lineTo(gridOffsetX + (gridStepWidth * x), gridOffsetY + gridStepHeight * gridHeight)
-        }
-        for (let y = 1; y < gridHeight; y++) {
-            ctx.moveTo(gridOffsetX, gridOffsetY + gridStepHeight * y)
-            ctx.lineTo(gridOffsetX + (gridStepWidth * gridWidth), gridOffsetY + gridStepHeight * y)
+        if (gridWidth < 10 && gridHeight < 10) {
+            for (let x = 1; x < gridWidth; x++) {
+                ctx.moveTo(gridOffsetX + (gridStepWidth * x), gridOffsetY)
+                ctx.lineTo(gridOffsetX + (gridStepWidth * x), gridOffsetY + gridStepHeight * gridHeight)
+            }
+            for (let y = 1; y < gridHeight; y++) {
+                ctx.moveTo(gridOffsetX, gridOffsetY + gridStepHeight * y)
+                ctx.lineTo(gridOffsetX + (gridStepWidth * gridWidth), gridOffsetY + gridStepHeight * y)
+            }
         }
 
         ctx.stroke()
     }
     drawSprite(i, x, y) {
         const ctx = this.ctx;
+        const gridHeight = this.renderingInfo.height
+        const gridWidth = this.renderingInfo.width
 
         if (i == 0) {
             ctx.fillStyle = "blue"
@@ -90,6 +94,7 @@ class Renderer {
         } else if (i == 2) {
             ctx.fillStyle = "green"
         }
+        ctx.strokeStyle = ctx.fillStyle
 
         let gridStepHeight = this.GridStepHeight()
         let gridStepWidth = this.GridStepWidth()
@@ -99,9 +104,11 @@ class Renderer {
             gridOffsetY + gridStepHeight * y,
             gridStepWidth, gridStepHeight)
 
-        ctx.strokeStyle = "black"
-        ctx.lineWidth = 1
-        ctx.rect(gridOffsetX + gridStepWidth * x, gridOffsetY + gridStepHeight * y, gridStepWidth, gridStepHeight);
+        if (gridWidth < 10 && gridHeight < 10) {
+            ctx.strokeStyle = "black"
+            ctx.lineWidth = 1
+            ctx.rect(gridOffsetX + gridStepWidth * x, gridOffsetY + gridStepHeight * y, gridStepWidth, gridStepHeight);
+        }
         ctx.stroke()
     }
 }

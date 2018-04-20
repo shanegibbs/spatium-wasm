@@ -1,4 +1,5 @@
-RUST_VERSION=nightly-2018-03-24
+RUST_VERSION=nightly-2018-04-06
+LIBRARY_PATH=/usr/local/Cellar/gcc/7.3.0_1/lib/gcc/7
 
 build:
 	bash -c "find target -name '*.wasm' |xargs rm -f"

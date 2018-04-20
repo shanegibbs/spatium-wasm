@@ -1,3 +1,11 @@
+### Notes
+
+To use gfortran compiler on Mac (for openblas)
+
+```
+LIBRARY_PATH=/usr/local/Cellar/gcc/7.3.0_1/lib/gcc/7 cargo ...
+```
+
 ### Links
 
 * [Live Demo](https://shanegibbs.github.io/spatium-wasm/)
