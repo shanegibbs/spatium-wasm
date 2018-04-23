@@ -1,13 +1,14 @@
 use serde;
 use serde_json as json;
 
-use game::GameState;
 use action::*;
-use SpatiumSys;
+use game::GameState;
 use Metrics;
+use SpatiumSys;
 
 use rng::RcRng;
 
+mod neural_net;
 mod qtable;
 pub mod single_layer;
 

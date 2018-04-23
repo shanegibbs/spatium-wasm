@@ -167,11 +167,21 @@ pub mod tests {
         let game = GameParameters::Game1(Default::default());
         let model = ModelParameters::QNetwork(Default::default());
         let mut spat = Spatium::new(game, model, SpatiumDummy {}, rng.clone(), 10000).unwrap();
+        let mut scores = vec![];
         loop {
             let result = spat.step(rng.clone());
             // println!("{}", serde_json::to_string(&result).unwrap());
             if let Some(ref ep_result) = result.episode_result {
-                println!("{}", serde_json::to_string(&ep_result).unwrap());
+                scores.push(ep_result.score);
+                if scores.len() > 1000 {
+                    scores.remove(0);
+                }
+                println!(
+                    "{}: {}, {}",
+                    result.episode,
+                    serde_json::to_string(&ep_result).unwrap(),
+                    scores.iter().fold(0., |a, n| a+n) / scores.len() as f32
+                );
             }
             if result.done {
                 break;
@@ -200,15 +210,13 @@ pub mod tests {
             }
         }
 
-        use std::cell::RefCell;
-
         let mut results: Vec<_> = choices
             .iter()
             .map(|choice| {
                 println!("{:?}", choice);
                 let all_scores: Vec<_> = (0..7)
                     .into_par_iter()
-                    .map(|i| {
+                    .map(|_| {
                         let rng = RcRng::new(Box::new(rand::weak_rng()));
                         let minibatch_size = choice.0;
                         let expierence_buffer_size = choice.1;

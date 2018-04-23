@@ -196,7 +196,7 @@ export default class Sim extends React.Component {
         const renderingInfo = step.renderingInfo
 
         if (step.hasOwnProperty("episodeResult")) {
-          const idealMin = parseInt((this.steps.length / 6) * 5)
+          const idealMin = parseInt((this.steps.length / 20) * 19)
           if (stepIndex < idealMin) {
             stepIndex = idealMin
           }

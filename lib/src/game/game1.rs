@@ -1,6 +1,5 @@
 use super::*;
 use action::*;
-use ndarray::prelude::*;
 use SpatiumSys;
 
 pub struct Sprite {
@@ -28,9 +27,9 @@ pub struct Game1Parameters {
 
 impl Default for Game1Parameters {
     fn default() -> Self {
-        let size = 4;
+        let size = 3;
         Game1Parameters {
-            max_steps: 50,
+            max_steps: 30,
             size: size,
             random: true,
         }
@@ -152,7 +151,7 @@ impl State {
 
         (self.build_state(), self.reward, self.done)
     }
-    fn step(&mut self, sys: &SpatiumSys, action: &Action) -> (GameState, usize, bool) {
+    fn step(&mut self, _sys: &SpatiumSys, action: &Action) -> (GameState, usize, bool) {
         if self.done {
             panic!("Game already done");
         }
@@ -236,10 +235,12 @@ impl Game for Game1 {
     fn rendering_info(&self) -> RenderingInfo {
         let agent_layer = RenderingLayer {
             name: "agent".into(),
-            points: vec![Point {
-                x: self.state.agent.x,
-                y: self.state.agent.y,
-            }],
+            points: vec![
+                Point {
+                    x: self.state.agent.x,
+                    y: self.state.agent.y,
+                },
+            ],
         };
         let block_layer = RenderingLayer {
             name: "block".into(),

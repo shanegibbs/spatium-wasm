@@ -1,11 +1,10 @@
+use super::neural_net::*;
 use super::*;
 use rng::RcRng;
 
-use ag;
-use rand::{self, Rng};
 use ndarray::prelude::*;
-use ag::gradient_descent_ops::Optimizer;
 use rand::distributions::IndependentSample;
+use rand::{self, Rng};
 
 #[derive(Clone)]
 struct Experience {
@@ -21,13 +20,10 @@ pub struct SingleLayerNetwork {
     step: usize,
     inputs: usize,
     outputs: usize,
-    w: ArrayD<f32>,
-    b: ArrayD<f32>,
-    target_w: ArrayD<f32>,
-    target_b: ArrayD<f32>,
+    weights: Weights,
+    target_weights: Weights,
     last_action: (f32, Array1<f32>, f32),
     explore_chance: f32,
-    sgd_lr: f32,
     ep_numer: usize,
     experience_buf: Vec<Experience>,
 }
@@ -55,10 +51,10 @@ impl Default for SingleLayerNetworkParameters {
         SingleLayerNetworkParameters {
             minibatch_size: 10,
             expierence_buffer_size: 1000,
-            discount_factor: 0.99,
+            discount_factor: 0.9,
             learning: DynamicValue {
-                initial_rate: 0.1,
-                final_rate: 0.01,
+                initial_rate: 0.001,
+                final_rate: 0.001,
                 final_episode: 1000,
             },
             exploration: DynamicValue {
@@ -72,125 +68,56 @@ impl Default for SingleLayerNetworkParameters {
 
 impl SingleLayerNetwork {
     pub fn new(parameters: SingleLayerNetworkParameters, ios: (usize, usize), rng: RcRng) -> Self {
-        let inputs = ios.0;
-        let outputs = ios.1;
-        let arr_rng = ag::ndarray_ext::ArrRng::new(rng.clone());
-
-        let w = arr_rng.glorot_uniform(&[inputs, outputs]);
-        let b = ag::ndarray_ext::zeros(&[1, outputs]);
+        let (inputs, outputs) = ios;
+        let weights = Weights::new(inputs, outputs, 32, parameters.learning.initial_rate, rng);
 
         SingleLayerNetwork {
             parameters,
             step: 0,
             inputs,
             outputs,
-            w: w.clone(),
-            b: b.clone(),
-            target_w: w,
-            target_b: b,
+            weights: weights.clone(),
+            target_weights: weights,
             last_action: (0., Array1::zeros(0), 0.),
             explore_chance: 1.0,
-            sgd_lr: 0.1,
             ep_numer: 1,
             experience_buf: vec![],
         }
     }
-    // returns a_val [len], q_val [len,4], max_q [len]
+
     fn run_network(
         &self,
         _sys: &SpatiumSys,
         x_val: Array2<f32>,
+        weights: &Weights,
     ) -> (Array1<f32>, Array2<f32>, Array1<f32>) {
-        let len = x_val.shape()[0];
-        let x_val = x_val.into_dyn();
-
-        let x = ag::placeholder(&[-1, self.inputs as isize]);
-        let w = ag::variable(self.w.clone());
-        let b = ag::variable(self.b.clone());
-        let z = ag::matmul(&x, &w) + &b;
-        let zz = ag::sigmoid(&z);
-        let max = ag::reduce_max(&zz, &[1], false);
-        let a = ag::argmax(&zz, 1, false);
-
-        let result = ag::eval(&[&a, &zz, &max], &[(&x, &x_val)]);
-
-        let a_val = result[0].clone().expect("eval a_val");
-        let q_val = result[1].clone().expect("eval q_val");
-        let max_q = result[2].clone().expect("eval max_q");
-
-        assert_eq!(a_val.shape(), [len]);
-        assert_eq!(q_val.shape(), [len, self.outputs]);
-        assert_eq!(max_q.shape(), [len]);
-
-        return (
-            a_val.into_shape(len).expect("a_val shape"),
-            q_val.into_shape((len, self.outputs)).expect("q_val shape"),
-            max_q.into_shape(len).expect("max_q shape"),
-        );
+        let net: NeuralNet = weights.into();
+        net.run(x_val)
     }
+
+    // returns a_val [len], q_val [len,4], max_q [len]
+    fn run_q_network(
+        &self,
+        sys: &SpatiumSys,
+        x_val: Array2<f32>,
+    ) -> (Array1<f32>, Array2<f32>, Array1<f32>) {
+        self.run_network(sys, x_val, &self.weights)
+    }
+
     // returns a_val [len], q_val [len,4], max_q [len]
     fn run_target_network(
         &self,
-        _sys: &SpatiumSys,
+        sys: &SpatiumSys,
         x_val: Array2<f32>,
     ) -> (Array1<f32>, Array2<f32>, Array1<f32>) {
-        let len = x_val.shape()[0];
-        let x_val = x_val.into_dyn();
-
-        let x = ag::placeholder(&[-1, self.inputs as isize]);
-        let w = ag::variable(self.target_w.clone());
-        let b = ag::variable(self.target_b.clone());
-        let z = ag::matmul(&x, &w) + &b;
-        let zz = ag::sigmoid(&z);
-        let max = ag::reduce_max(&zz, &[1], false);
-        let a = ag::argmax(&zz, 1, false);
-
-        let result = ag::eval(&[&a, &zz, &max], &[(&x, &x_val)]);
-
-        let a_val = result[0].clone().expect("eval a_val");
-        let q_val = result[1].clone().expect("eval q_val");
-        let max_q = result[2].clone().expect("eval max_q");
-
-        assert_eq!(a_val.shape(), [len]);
-        assert_eq!(q_val.shape(), [len, self.outputs]);
-        assert_eq!(max_q.shape(), [len]);
-
-        return (
-            a_val.into_shape(len).expect("a_val shape"),
-            q_val.into_shape((len, self.outputs)).expect("q_val shape"),
-            max_q.into_shape(len).expect("max_q shape"),
-        );
+        self.run_network(sys, x_val, &self.target_weights)
     }
-    fn run_update(&mut self, x_val: ArrayD<f32>, y_val: ArrayD<f32>) {
-        let inputs_i = self.inputs as isize;
-        let outputs_i = self.outputs as isize;
 
-        let x = ag::placeholder(&[-1, inputs_i]);
-        let y = ag::placeholder(&[-1, outputs_i]);
-        let w = ag::variable(self.w.clone());
-        let b = ag::variable(self.b.clone());
-        let z = ag::matmul(&x, &w) + &b;
-        let zz = ag::sigmoid(&z);
-
-        let e = ag::sub(&y, &zz);
-        let es = ag::square(&e);
-        let mse = ag::reduce_sum(&es, &[0], false);
-        let mse = ag::reduce_sum(&mse, &[0], false);
-
-        let params = [&w, &b];
-        let grads = ag::grad(&[&mse], &params);
-
-        use ag::ops::gradient_descent_ops::sgd::SGD;
-        let mut sgd = SGD { lr: self.sgd_lr };
-        let update_ops = sgd.compute_updates(&params, &grads);
-
-        let feeds = &[(&x, &x_val), (&y, &y_val)];
-
-        ag::run(&update_ops, feeds);
-
-        let new_vars = ag::eval(&[&w, &b], &[]);
-        self.w = new_vars[0].clone().expect("run_update w");
-        self.b = new_vars[1].clone().expect("run_update b");
+    fn run_update(&mut self, x_val: Array2<f32>, y_val: Array2<f32>) -> f32 {
+        let mut net: NeuralNet = (&self.weights).into();
+        let e = net.update(x_val, y_val);
+        self.weights = net.build_weights();
+        e
     }
     fn update_variables(&mut self) {
         let ep_numer = self.ep_numer as f32;
@@ -216,11 +143,11 @@ impl SingleLayerNetwork {
             let end_lr = self.parameters.learning.final_rate;
             let final_lr_ep = self.parameters.learning.final_episode;
             if self.ep_numer > final_lr_ep {
-                self.sgd_lr = end_lr;
+                self.weights.lr = end_lr;
             } else {
                 let per_frame_loss = (start_lr - end_lr) / final_lr_ep as f32;
                 let ex = start_lr - (ep_numer * per_frame_loss);
-                self.sgd_lr = ex;
+                self.weights.lr = ex;
             }
             // println!("lr: {}", self.sgd_lr);
         }
@@ -229,11 +156,8 @@ impl SingleLayerNetwork {
 
 impl Network for SingleLayerNetwork {
     fn test(&self, sys: &SpatiumSys, game_state: &GameState) -> (Action, f32) {
-        let result = self.run_network(sys, game_state.into());
-        (
-            (result.0[0] as usize).into(),
-            result.2[0] * 10.,
-        )
+        let result = self.run_q_network(sys, game_state.into());
+        ((result.0[0] as usize).into(), result.2[0] * 10.)
     }
 
     fn next_action(
@@ -255,7 +179,7 @@ impl Network for SingleLayerNetwork {
 
         // greedy if not exporing
         if !performed {
-            let result = self.run_network(sys, s.into());
+            let result = self.run_q_network(sys, s.into());
             self.last_action = (result.0[0], result.1.row(0).to_owned(), result.2[0]);
         }
 
@@ -278,7 +202,7 @@ impl Network for SingleLayerNetwork {
 
         let experience_buf_size = self.parameters.expierence_buffer_size;
         let minibatch_size = self.parameters.minibatch_size;
-        let y = self.parameters.discount_factor;
+        let discount_factor = self.parameters.discount_factor;
 
         // update expierence buffer
         if self.experience_buf.len() == experience_buf_size - 1 {
@@ -303,10 +227,12 @@ impl Network for SingleLayerNetwork {
             for i in 0..minibatch_size {
                 let ex = rng.choose(&self.experience_buf).unwrap().to_owned();
 
-                let reward = ex.reward as f32 / 10.;
+                let reward = if ex.reward > 0. { 1. } else { 0. };
                 let s1: Array2<f32> = (&ex.state).into();
                 let s2: Array2<f32> = (&ex.next_state).into();
 
+                // Combine s1 and s2 into states to run the target network
+                // Update batch_states with s1 for the final update
                 let mut states: Array2<f32> = Array::zeros((2, self.inputs));
                 for n in 0..s1.shape()[1] {
                     states[[0, n]] = s1[[0, n]];
@@ -318,30 +244,48 @@ impl Network for SingleLayerNetwork {
 
                 let result = self.run_target_network(sys, states);
 
+                // we want our q1 to be the max of q2
                 let q1_val = result.1.select(Axis(0), &[0]);
-                let q2_max = result.2[[1]];
+                let r2 = result.2[[1]];
 
                 let mut target_q = q1_val;
                 assert_eq!(target_q.shape(), &[1, 4]);
 
                 let action_i: usize = (&ex.action).into();
-                target_q[[0, action_i]] = reward + (y * q2_max);
 
+                // println!("target: {:?}", result);
+                // println!("ex.action: {:?}", ex.action);
+                // println!("target_q_0: {:?}", target_q);
+                let change_q = (discount_factor * r2) - target_q[[0, action_i]];
+                target_q[[0, action_i]] = target_q[[0, action_i]] + (0.5 * change_q);
                 if ex.done {
                     target_q[[0, action_i]] = reward;
                 }
+                // println!("target_q_1: {:?}", target_q);
+                // println!("change_q: {}", change_q);
 
                 for n in 0..target_q.shape()[1] {
                     batch_targets[[i, n]] = target_q[[0, n]];
                 }
+
+                // if ex.done {
+                //     println!("TERMINAL {}", reward);
+                // }
             }
 
-            self.run_update(batch_states.into_dyn(), batch_targets.into_dyn());
+            // println!("batch_states: {:?}", batch_states);
+            // println!("batch_targets: {:?}", batch_targets);
+
+            // let net: NeuralNet = (&self.weights).into();
+            // let es = net.mse_each(batch_states.clone(), batch_targets.clone());
+            // println!("es: {:?}", es);
+
+            let e = self.run_update(batch_states, batch_targets);
+            println!("e={}", e);
         }
 
         if self.step % 300 == 0 {
-            self.target_w = self.w.clone();
-            self.target_b = self.b.clone();
+            self.target_weights = self.weights.clone();
         }
 
         if done {
@@ -358,8 +302,8 @@ impl Network for SingleLayerNetwork {
 #[cfg(test)]
 mod test {
     use super::*;
-    use spatium::tests::SpatiumDummy;
     use rand::weak_rng;
+    use spatium::tests::SpatiumDummy;
 
     #[test]
     fn test_main() {
